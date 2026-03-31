@@ -372,12 +372,34 @@ if nav == "📡 Sources":
                         st.cache_data.clear()
                         st.rerun()
 
-    # ── Pipeline runner — lives OUTSIDE button handlers, reads session state ──
+    # ── Pipeline runner — reads session state, persists results ─────────────
     _queue = st.session_state.get("pipeline_queue", [])
-    if _queue:
+    _result = st.session_state.get("pipeline_result")
+
+    # Show results from previous run (persisted so rerun doesn't wipe them)
+    if _result:
+        _open  = _result["open_roles"]
+        _radar = _result["radar_added"]
+        _skip  = _result["skipped"]
+        _by_co: dict = {}
+        for r in _open:
+            _by_co.setdefault(r["company"], []).append(r["title"])
+        for co_name, titles in _by_co.items():
+            st.success(f"**{co_name}**: {len(titles)} open role(s) found → added to Open Roles ({', '.join(titles)})")
+        for r in _radar:
+            st.success(f"**{r['company']}**: no open roles → added to On Radar ({r['score']}/100) with outreach draft")
+        for r in _skip:
+            st.warning(f"**{r['company']}**: not a fit (score {r['score']}/100) → skipped")
+        if not _open and not _radar and not _skip:
+            st.info("Workflow ran — nothing new to add.")
+        if st.button("✕ Clear", key="pipeline_clear"):
+            st.session_state.pop("pipeline_result", None)
+            st.rerun()
+
+    elif _queue:
         _total_db = len(company_lookup) or 70
         st.info(f"Ready to run workflow for: **{', '.join(_queue)}**")
-        _pc1, _pc2 = st.columns(2)
+        _pc1, _pc2, _pc3 = st.columns([2, 2, 1])
         with _pc1:
             _run_targeted = st.button(
                 f"🎯 Run for just these {len(_queue)} companies",
@@ -388,9 +410,10 @@ if nav == "📡 Sources":
                 f"🔄 Run for all {_total_db}+ companies in DB",
                 key="pipeline_run_all",
             )
-        if st.button("✕ Cancel", key="pipeline_cancel"):
-            st.session_state.pop("pipeline_queue", None)
-            st.rerun()
+        with _pc3:
+            if st.button("✕ Cancel", key="pipeline_cancel"):
+                st.session_state.pop("pipeline_queue", None)
+                st.rerun()
 
         if _run_targeted or _run_all:
             _names = (
@@ -402,23 +425,8 @@ if nav == "📡 Sources":
                 from agent.pipeline import run_pipeline_for_companies
                 _res = run_pipeline_for_companies(_names)
             st.session_state.pop("pipeline_queue", None)
+            st.session_state["pipeline_result"] = _res
             st.cache_data.clear()
-            _open  = _res["open_roles"]
-            _radar = _res["radar_added"]
-            _skip  = _res["skipped"]
-
-            # Per-company feedback — works for 1 or many
-            _by_co: dict = {}
-            for r in _open:
-                _by_co.setdefault(r["company"], []).append(r["title"])
-            for co_name, titles in _by_co.items():
-                st.success(f"**{co_name}**: {len(titles)} open role(s) found → added to Open Roles ({', '.join(titles)})")
-            for r in _radar:
-                st.success(f"**{r['company']}**: no open roles right now → added to On Radar ({r['score']}/100) with outreach draft")
-            for r in _skip:
-                st.warning(f"**{r['company']}**: not a fit for your profile (score {r['score']}/100) → skipped")
-            if not _open and not _radar and not _skip:
-                st.info("Workflow ran — nothing new to add.")
             st.rerun()
 
     st.divider()
