@@ -399,6 +399,42 @@ if nav == "📡 Sources":
         st.cache_data.clear()
 
     st.divider()
+    st.markdown("#### Re-score unscored radar companies")
+    st.caption("Scores any company in the DB that has no attention score yet (e.g. manually added companies like Klarity).")
+    if st.button("🔄 Score unscored companies"):
+        from agent.discover_from_rss import score_company_for_radar
+        unscored = (
+            supabase.table("companies")
+            .select("id, name, what_they_do, sector")
+            .is_("attention_score", "null")
+            .execute()
+            .data or []
+        )
+        if not unscored:
+            st.info("All companies already have an attention score.")
+        else:
+            results = []
+            prog = st.progress(0, text=f"Scoring {len(unscored)} companies...")
+            for i, co in enumerate(unscored):
+                try:
+                    scored = score_company_for_radar(co["name"], "", co.get("what_they_do") or "")
+                    supabase.table("companies").update({
+                        "attention_score": scored.get("attention_score"),
+                        "what_they_do": scored.get("what_they_do") or co.get("what_they_do"),
+                        "sector": scored.get("sector") or co.get("sector"),
+                        "stage": scored.get("stage"),
+                    }).eq("id", co["id"]).execute()
+                    results.append(f"**{co['name']}**: {scored.get('attention_score')}/100")
+                except Exception as e:
+                    results.append(f"**{co['name']}**: error ({e})")
+                prog.progress((i + 1) / len(unscored), text=f"Scored {i+1}/{len(unscored)}")
+            st.success(f"Done. {len(unscored)} companies scored:")
+            for r in results:
+                st.markdown(f"- {r}")
+            st.cache_data.clear()
+            st.rerun()
+
+    st.divider()
     st.markdown("#### Connected systems")
     st.markdown("""
 <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-top:8px">
