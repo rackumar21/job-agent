@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+supabase
+anthropic
+python-dotenv
+httpx
+apscheduler
+apify-client
+streamlit
