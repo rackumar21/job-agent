@@ -228,9 +228,12 @@ except Exception:
 
 _total_cos = len(company_lookup) or 70
 
-with st.expander("How this agent works"):
-    st.markdown(f"""
-<table style="width:100%; border-collapse:collapse; font-size:0.92em;">
+st.markdown(f"""
+<details style="border:1px solid #e5e7eb; border-radius:8px; padding:6px 16px 10px 16px; margin-bottom:8px;">
+<summary style="font-size:1.08rem; font-weight:600; cursor:pointer; padding:6px 0; list-style:none; display:flex; align-items:center; gap:6px;">
+<span style="font-size:0.85em; color:#6b7280;">▶</span> How this agent works
+</summary>
+<table style="width:100%; border-collapse:collapse; font-size:0.92em; margin-top:8px;">
 <tr>
 <td style="padding:10px 14px; vertical-align:top; width:25%">
 <div style="font-size:1.4em">🏢 → 🔍</div>
@@ -254,6 +257,7 @@ with st.expander("How this agent works"):
 </td>
 </tr>
 </table>
+</details>
 """, unsafe_allow_html=True)
 
 _stat_hidden_j  = st.session_state.get("hidden_job_ids", set())
@@ -340,7 +344,12 @@ if nav == "📡 Sources":
                 st.error(result["error"])
                 st.info("Try pasting the post text directly in the box above.")
             else:
-                newly_added = result["added_ashby"] + result["added_greenhouse"] + result.get("added_to_radar", [])
+                newly_added = (
+                    result["added_ashby"]
+                    + result["added_greenhouse"]
+                    + result.get("added_to_radar", [])
+                    + result.get("no_ats_found", [])
+                )
                 col_a, col_b, col_c = st.columns(3)
                 with col_a:
                     st.markdown("**Added to tracking**")
@@ -350,19 +359,67 @@ if nav == "📡 Sources":
                     else:
                         st.caption("None new")
                 with col_b:
-                    if result.get("no_ats_found"):
-                        st.markdown("**No job board found**")
-                        for c in result["no_ats_found"]:
-                            st.markdown(f"- {c}")
-                with col_c:
-                    if result["already_known"]:
-                        st.markdown("**Already tracked**")
+                    st.markdown("**Already tracked**")
+                    if result.get("already_known"):
                         for c in result["already_known"]:
                             st.markdown(f"- {c}")
+                    else:
+                        st.caption("None")
+                with col_c:
+                    st.caption("")
 
                 if newly_added:
                     st.session_state["pipeline_queue"] = newly_added
                     st.cache_data.clear()
+
+                # ── Show pipeline buttons inline immediately ──────────────────
+                if newly_added:
+                    _total_db = len(company_lookup) or 70
+                    st.markdown("**Run full pipeline:**")
+                    _ic1, _ic2 = st.columns(2)
+                    with _ic1:
+                        _run_new = st.button(
+                            f"🎯 Run for these {len(newly_added)} companies",
+                            type="primary", key="inline_run_new",
+                        )
+                    with _ic2:
+                        _run_all_inline = st.button(
+                            f"🔄 Run for all {_total_db}+ companies in DB",
+                            key="inline_run_all",
+                        )
+                    if _run_new or _run_all_inline:
+                        _names = (
+                            newly_added if _run_new
+                            else [r["name"] for r in supabase.table("companies").select("name").execute().data or []]
+                        )
+                        _label = f"these {len(_names)}" if _run_new else f"all {len(_names)}"
+                        with st.spinner(f"Running full pipeline for {_label} companies..."):
+                            from agent.pipeline import run_pipeline_for_companies
+                            _res = run_pipeline_for_companies(_names)
+                        st.session_state.pop("pipeline_queue", None)
+                        st.cache_data.clear()
+                        _open = _res["open_roles"]
+                        _radar = _res["radar_added"]
+                        _skip = _res["skipped"]
+                        if _open or _radar:
+                            st.success(
+                                f"Pipeline complete: {len(_open)} role(s) in Open Roles · "
+                                f"{len(_radar)} company/companies in On Radar with drafts"
+                            )
+                            if _open:
+                                _by_co: dict = {}
+                                for r in _open:
+                                    _by_co.setdefault(r["company"], []).append(r["title"])
+                                for co_name, titles in _by_co.items():
+                                    st.markdown(f"- **{co_name}**: {', '.join(titles)}")
+                            if _radar:
+                                for r in _radar:
+                                    st.markdown(f"- **{r['company']}** on radar ({r['score']}/100)")
+                            if _skip:
+                                st.caption(f"Skipped (low score): {', '.join(r['company'] for r in _skip)}")
+                        else:
+                            st.info("Pipeline ran. No new roles or radar companies found.")
+                        st.rerun()
 
     st.divider()
     st.markdown("#### Auto-scan funding news")
