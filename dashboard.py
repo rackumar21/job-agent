@@ -517,68 +517,6 @@ if nav == "📡 Sources":
             st.cache_data.clear()
             st.rerun()
 
-    # ── Pipeline runner ──────────────────────────────────────────────────────
-    _queue = st.session_state.get("pipeline_queue", [])
-    _total_cos = len(company_lookup) or 70
-    if _queue:
-        st.divider()
-        st.markdown(f"#### Run full pipeline")
-        st.caption(
-            f"Score each company, check for open roles, route to Open Roles or On Radar "
-            f"with outreach drafts."
-        )
-        _pc1, _pc2 = st.columns(2)
-        with _pc1:
-            _run_targeted = st.button(
-                f"🎯 Run for these {len(_queue)} companies",
-                type="primary",
-                key="run_pipeline_targeted",
-            )
-        with _pc2:
-            _run_all = st.button(
-                f"🔄 Run for all {_total_cos}+ companies in DB",
-                key="run_pipeline_all",
-            )
-
-        if _run_targeted or _run_all:
-            _names = (
-                _queue if _run_targeted
-                else [r["name"] for r in supabase.table("companies").select("name").execute().data or []]
-            )
-            _label = f"these {len(_names)} companies" if _run_targeted else f"all {len(_names)} companies"
-            with st.spinner(f"Running full pipeline for {_label}..."):
-                from agent.pipeline import run_pipeline_for_companies
-                _res = run_pipeline_for_companies(_names)
-
-            st.session_state.pop("pipeline_queue", None)
-            st.cache_data.clear()
-
-            _open = _res["open_roles"]
-            _radar = _res["radar_added"]
-            _skip = _res["skipped"]
-
-            if _open or _radar:
-                st.success(
-                    f"Pipeline complete: "
-                    f"{len(_open)} role(s) → Open Roles · "
-                    f"{len(_radar)} company/companies → On Radar with drafts"
-                )
-                if _open:
-                    st.markdown("**Open Roles found:**")
-                    _by_co: dict = {}
-                    for r in _open:
-                        _by_co.setdefault(r["company"], []).append(r["title"])
-                    for co_name, titles in _by_co.items():
-                        st.markdown(f"- **{co_name}**: {', '.join(titles)}")
-                if _radar:
-                    st.markdown("**Added to On Radar with outreach drafts:**")
-                    for r in _radar:
-                        st.markdown(f"- **{r['company']}** ({r['score']}/100)")
-                if _skip:
-                    st.caption(f"Skipped (low score): {', '.join(r['company'] for r in _skip)}")
-            else:
-                st.info("Pipeline ran. No new roles or radar companies found.")
-
     st.divider()
     st.markdown("#### Connected systems")
     st.markdown("""
