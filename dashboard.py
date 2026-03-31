@@ -336,7 +336,7 @@ if nav == "📡 Sources":
         if not post_url and not post_text.strip():
             st.warning("Paste a URL or some post text first.")
         else:
-            with st.spinner("Extracting company names and finding job boards..."):
+            with st.spinner("Extracting company names..."):
                 from agent.discover_from_post import process_post
                 result = process_post(url=post_url or None, text=post_text.strip() or None)
 
@@ -344,12 +344,12 @@ if nav == "📡 Sources":
                 st.error(result["error"])
                 st.info("Try pasting the post text directly in the box above.")
             else:
+                found = result.get("companies_found", [])
                 newly_added = result.get("added", [])
                 already_tracked = result.get("already_known", [])
-                found = result.get("companies_found", [])
 
                 if not found:
-                    st.warning("No company names found in the text. Try typing just the company name (e.g. 'Cekura') or paste a full LinkedIn post.")
+                    st.warning("No company names found. Try typing just the company name (e.g. 'Gamma') or paste a full LinkedIn post.")
                 else:
                     col_a, col_b = st.columns(2)
                     with col_a:
@@ -367,62 +367,63 @@ if nav == "📡 Sources":
                         else:
                             st.caption("None")
 
-                if newly_added:
-                    st.session_state["pipeline_queue"] = newly_added
-                    st.cache_data.clear()
-
-                # ── Show pipeline buttons inline immediately ──────────────────
-                if newly_added:
-                    _total_db = len(company_lookup) or 70
-                    st.markdown("**Run full pipeline:**")
-                    _ic1, _ic2 = st.columns(2)
-                    with _ic1:
-                        _run_new = st.button(
-                            f"🎯 Run for these {len(newly_added)} companies",
-                            type="primary", key="inline_run_new",
-                        )
-                    with _ic2:
-                        _run_all_inline = st.button(
-                            f"🔄 Run for all {_total_db}+ companies in DB",
-                            key="inline_run_all",
-                        )
-                    if _run_new or _run_all_inline:
-                        _names = (
-                            newly_added if _run_new
-                            else [r["name"] for r in supabase.table("companies").select("name").execute().data or []]
-                        )
-                        _label = f"these {len(_names)}" if _run_new else f"all {len(_names)}"
-                        with st.spinner(f"Running full pipeline for {_label} companies..."):
-                            from agent.pipeline import run_pipeline_for_companies
-                            _res = run_pipeline_for_companies(_names)
-                        st.session_state.pop("pipeline_queue", None)
+                    if newly_added:
+                        st.session_state["pipeline_queue"] = newly_added
                         st.cache_data.clear()
-                        _open = _res["open_roles"]
-                        _radar = _res["radar_added"]
-                        _skip = _res["skipped"]
-                        if _open or _radar:
-                            st.success(
-                                f"Pipeline complete: {len(_open)} role(s) in Open Roles · "
-                                f"{len(_radar)} company/companies in On Radar with drafts"
-                            )
-                            if _open:
-                                _by_co: dict = {}
-                                for r in _open:
-                                    _by_co.setdefault(r["company"], []).append(r["title"])
-                                for co_name, titles in _by_co.items():
-                                    st.markdown(f"- **{co_name}**: {', '.join(titles)}")
-                            if _radar:
-                                for r in _radar:
-                                    st.markdown(f"- **{r['company']}** on radar ({r['score']}/100)")
-                            if _skip:
-                                st.caption(f"Skipped (low score): {', '.join(r['company'] for r in _skip)}")
-                        else:
-                            st.info("Pipeline ran. No new roles or radar companies found.")
                         st.rerun()
+
+    # ── Pipeline runner — lives OUTSIDE button handlers, reads session state ──
+    _queue = st.session_state.get("pipeline_queue", [])
+    if _queue:
+        _total_db = len(company_lookup) or 70
+        st.info(f"Ready to run workflow for: **{', '.join(_queue)}**")
+        _pc1, _pc2 = st.columns(2)
+        with _pc1:
+            _run_targeted = st.button(
+                f"🎯 Run for just these {len(_queue)} companies",
+                type="primary", key="pipeline_run_targeted",
+            )
+        with _pc2:
+            _run_all = st.button(
+                f"🔄 Run for all {_total_db}+ companies in DB",
+                key="pipeline_run_all",
+            )
+        if st.button("✕ Cancel", key="pipeline_cancel"):
+            st.session_state.pop("pipeline_queue", None)
+            st.rerun()
+
+        if _run_targeted or _run_all:
+            _names = (
+                _queue if _run_targeted
+                else [r["name"] for r in supabase.table("companies").select("name").execute().data or []]
+            )
+            _label = f"these {len(_names)}" if _run_targeted else f"all {len(_names)}"
+            with st.spinner(f"Running workflow for {_label} companies: score → check roles → route..."):
+                from agent.pipeline import run_pipeline_for_companies
+                _res = run_pipeline_for_companies(_names)
+            st.session_state.pop("pipeline_queue", None)
+            st.cache_data.clear()
+            _open  = _res["open_roles"]
+            _radar = _res["radar_added"]
+            _skip  = _res["skipped"]
+
+            # Per-company feedback — works for 1 or many
+            _by_co: dict = {}
+            for r in _open:
+                _by_co.setdefault(r["company"], []).append(r["title"])
+            for co_name, titles in _by_co.items():
+                st.success(f"**{co_name}**: {len(titles)} open role(s) found → added to Open Roles ({', '.join(titles)})")
+            for r in _radar:
+                st.success(f"**{r['company']}**: no open roles right now → added to On Radar ({r['score']}/100) with outreach draft")
+            for r in _skip:
+                st.warning(f"**{r['company']}**: not a fit for your profile (score {r['score']}/100) → skipped")
+            if not _open and not _radar and not _skip:
+                st.info("Workflow ran — nothing new to add.")
+            st.rerun()
 
     st.divider()
     st.markdown("#### Auto-scan funding news")
-    st.caption("Pulls from Next Play newsletter + TechCrunch. Extracts companies, checks for roles, adds the rest to Radar.")
+    st.caption("Pulls from Next Play newsletter + TechCrunch. Extracts companies, then asks you what to do.")
     if st.button("📡 Run funding scan", type="primary"):
         with st.spinner("Scanning Next Play and TechCrunch for new companies..."):
             from agent.discover_from_rss import extract_companies_from_rss
@@ -431,51 +432,7 @@ if nav == "📡 Sources":
             st.success(f"Found {len(_rss_new)} new companies: {', '.join(_rss_new)}")
             st.session_state["pipeline_queue"] = _rss_new
             st.cache_data.clear()
-            _total_db_rss = len(company_lookup) or 70
-            st.markdown("**Run full pipeline:**")
-            _rc1, _rc2 = st.columns(2)
-            with _rc1:
-                _rss_run_new = st.button(
-                    f"🎯 Run for these {len(_rss_new)} companies",
-                    type="primary", key="rss_run_new",
-                )
-            with _rc2:
-                _rss_run_all = st.button(
-                    f"🔄 Run for all {_total_db_rss}+ companies in DB",
-                    key="rss_run_all",
-                )
-            if _rss_run_new or _rss_run_all:
-                _names = (
-                    _rss_new if _rss_run_new
-                    else [r["name"] for r in supabase.table("companies").select("name").execute().data or []]
-                )
-                with st.spinner(f"Running pipeline for {len(_names)} companies..."):
-                    from agent.pipeline import run_pipeline_for_companies
-                    _res = run_pipeline_for_companies(_names)
-                st.session_state.pop("pipeline_queue", None)
-                st.cache_data.clear()
-                _open = _res["open_roles"]
-                _radar = _res["radar_added"]
-                _skip = _res["skipped"]
-                if _open or _radar:
-                    st.success(
-                        f"Pipeline complete: {len(_open)} role(s) in Open Roles · "
-                        f"{len(_radar)} company/companies in On Radar with drafts"
-                    )
-                    if _open:
-                        _by_co: dict = {}
-                        for r in _open:
-                            _by_co.setdefault(r["company"], []).append(r["title"])
-                        for co_name, titles in _by_co.items():
-                            st.markdown(f"- **{co_name}**: {', '.join(titles)}")
-                    if _radar:
-                        for r in _radar:
-                            st.markdown(f"- **{r['company']}** on radar ({r['score']}/100)")
-                    if _skip:
-                        st.caption(f"Skipped: {', '.join(r['company'] for r in _skip)}")
-                else:
-                    st.info("Pipeline ran. No new roles or radar companies found.")
-                st.rerun()
+            st.rerun()
         else:
             st.info("No new companies found in today's feeds.")
 
