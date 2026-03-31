@@ -56,6 +56,7 @@ TARGETS (inferred from actual applications + stated preferences):
 - Enterprise AI: knowledge management (Glean), workflow automation (Assembled), evaluation (Scale AI)
 - Fintech: consumer personal finance (EarnIn), B2B fintech infrastructure with strong product layer (Plaid), payments/FX
 - Legal AI: workflow automation for law firms and legal teams (Harvey, Supio, truthsystems) — HIGH interest given finance/compliance background
+- Finance workflow AI: contract data extraction, AP/AR automation, financial document processing, accounting AI sold to CFOs and finance teams (Klarity, Ramp, Brex, Zip) — STRONG FIT; candidate has 5+ years in PE/IB/finance and deeply understands the buyer
 - Voice AI: conversational AI, voice agents, qualitative research, conversation intelligence (Listen Labs, TruthSeek, Giga) — HIGH interest given her TruthSeek background building LLM voice interview agents
 - HR/recruiting AI: people data, talent intelligence (Juicebox, Pallet)
 - Video AI: AI-generated media, avatar platforms (HeyGen, Tavus)
