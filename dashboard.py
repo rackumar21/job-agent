@@ -344,29 +344,28 @@ if nav == "📡 Sources":
                 st.error(result["error"])
                 st.info("Try pasting the post text directly in the box above.")
             else:
-                newly_added = (
-                    result["added_ashby"]
-                    + result["added_greenhouse"]
-                    + result.get("added_to_radar", [])
-                    + result.get("no_ats_found", [])
-                )
-                col_a, col_b, col_c = st.columns(3)
-                with col_a:
-                    st.markdown("**Added to tracking**")
-                    if newly_added:
-                        for c in newly_added:
-                            st.markdown(f"- {c}")
-                    else:
-                        st.caption("None new")
-                with col_b:
-                    st.markdown("**Already tracked**")
-                    if result.get("already_known"):
-                        for c in result["already_known"]:
-                            st.markdown(f"- {c}")
-                    else:
-                        st.caption("None")
-                with col_c:
-                    st.caption("")
+                newly_added = result.get("added", [])
+                already_tracked = result.get("already_known", [])
+                found = result.get("companies_found", [])
+
+                if not found:
+                    st.warning("No company names found in the text. Try typing just the company name (e.g. 'Cekura') or paste a full LinkedIn post.")
+                else:
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        st.markdown("**Added to dashboard**")
+                        if newly_added:
+                            for c in newly_added:
+                                st.markdown(f"- {c}")
+                        else:
+                            st.caption("None new")
+                    with col_b:
+                        st.markdown("**Already tracked**")
+                        if already_tracked:
+                            for c in already_tracked:
+                                st.markdown(f"- {c}")
+                        else:
+                            st.caption("None")
 
                 if newly_added:
                     st.session_state["pipeline_queue"] = newly_added

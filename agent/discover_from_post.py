@@ -48,21 +48,26 @@ def fetch_post_text(url: str) -> str:
 
 
 def extract_company_names(text: str) -> list:
-    """Use Claude to extract company names from post text."""
-    prompt = f"""Extract all company names mentioned in this post. These are startup or tech company names that are hiring.
+    """Use Claude to extract company names from post text or plain company name input."""
+    prompt = f"""Extract all company names from the text below.
 
-POST TEXT:
+The input may be:
+- A LinkedIn or Twitter post mentioning hiring startups
+- A plain list of company names (one per line, comma separated, or space separated)
+- A single company name typed directly (e.g. "Cekura" or "Klarity AI")
+
+TEXT:
 {text[:8000]}
 
 Rules:
-- Resolve Twitter/X handles to company names (e.g. @warpdotco → Warp, @hedra_labs → Hedra, @joinkaizen → Kaizen, @tryshortcutai → Shortcut)
-- Include companies mentioned as hiring, even if just "we're hiring" in a tweet
-- Exclude: individual people's names, VCs/investors, generic words
+- If the input looks like a plain company name or list of names, return them directly
+- Resolve Twitter/X handles to company names (e.g. @warpdotco → Warp, @hedra_labs → Hedra)
+- Exclude: individual people's names, VCs/investors, generic words like "startup" or "company"
 - Only include actual company names, not roles or job titles
 
 Return ONLY a JSON array of company name strings. No markdown, no explanation.
-Example: ["Warp", "Anthropic", "Kaizen", "Hedra", "Shortcut"]
-If no companies found, return [].
+Example: ["Warp", "Anthropic", "Kaizen"]
+If nothing looks like a company name, return [].
 """
     msg = client.messages.create(
         model="claude-haiku-4-5-20251001",
@@ -145,94 +150,43 @@ def process_post(url: str = None, text: str = None) -> dict:
     # Step 2: Extract company names
     companies = extract_company_names(text)
 
-    added_ashby = []
-    added_greenhouse = []
-    added_to_radar = []
-    no_ats = []
-    already = []
-    added_ashby_slugs = {}
-    added_greenhouse_slugs = {}
-
-    from agent.discover_from_rss import score_company_for_radar, generate_relationship_message
+    added = []       # newly added to DB
+    already = []     # already tracked
 
     for company in companies:
         if is_already_tracked(company):
             already.append(company)
             continue
 
-        # Step 1: Score company first — quality gate before anything else
-        scored = score_company_for_radar(company, "", text[:1000])
-        attention = scored.get("attention_score", 0)
-        what_they_do = scored.get("what_they_do", "")
-        sector = scored.get("sector", "") or None
-        stage = scored.get("stage", "") or None
-
-        if attention < 60:
-            print(f"  — Dropping {company} (score {attention}/100 — not a fit)")
-            continue
-
-        # Step 2: Company passed — now check ATS for open roles
-        # Step 2a: Try Ashby
+        # Find ATS slugs (no score gate — pipeline handles scoring)
         ashby_slug = find_ashby_slug(company)
-        if ashby_slug:
-            rel_msg = generate_relationship_message(company, what_they_do, text[:500])
-            supabase.table("companies").insert({
-                "name": company,
-                "ashby_slug": ashby_slug,
-                "source": "post",
-                "attention_score": attention,
-                "what_they_do": what_they_do,
-                "sector": sector,
-                "stage": stage,
-                "relationship_message": rel_msg or None,
-            }).execute()
-            added_ashby.append(company)
-            added_ashby_slugs[ashby_slug] = company
-            continue
+        gh_slug = None if ashby_slug else find_greenhouse_slug(company)
 
-        # Step 2b: Try Greenhouse
-        gh_slug = find_greenhouse_slug(company)
-        if gh_slug:
-            rel_msg = generate_relationship_message(company, what_they_do, text[:500])
-            supabase.table("companies").insert({
-                "name": company,
-                "greenhouse_slug": gh_slug,
-                "source": "post",
-                "attention_score": attention,
-                "what_they_do": what_they_do,
-                "sector": sector,
-                "stage": stage,
-                "relationship_message": rel_msg or None,
-            }).execute()
-            added_greenhouse.append(company)
-            added_greenhouse_slugs[gh_slug] = company
-            continue
-
-        # Step 2c: No ATS — add to radar
-        rel_msg = generate_relationship_message(company, what_they_do, text[:500])
-        supabase.table("companies").insert({
+        row = {
             "name": company,
             "source": "post",
-            "attention_score": attention,
-            "what_they_do": what_they_do,
-            "sector": sector,
-            "stage": stage,
-            "relationship_message": rel_msg or None,
             "radar_status": "watching",
-        }).execute()
+        }
+        if ashby_slug:
+            row["ashby_slug"] = ashby_slug
+        if gh_slug:
+            row["greenhouse_slug"] = gh_slug
 
-        if attention >= 60:
-            added_to_radar.append(f"{company} ({attention}/100 — {sector})")
-        else:
-            no_ats.append(f"{company} (score {attention}/100 — below threshold)")
+        try:
+            supabase.table("companies").insert(row).execute()
+            added.append(company)
+        except Exception:
+            already.append(company)  # likely duplicate
 
     return {
         "companies_found": companies,
-        "added_ashby": added_ashby,
-        "added_greenhouse": added_greenhouse,
-        "added_to_radar": added_to_radar,
-        "no_ats_found": no_ats,
+        "added": added,
         "already_known": already,
-        "added_ashby_slugs": added_ashby_slugs,
-        "added_greenhouse_slugs": added_greenhouse_slugs,
+        # Legacy keys for backward compat
+        "added_ashby": added,
+        "added_greenhouse": [],
+        "added_to_radar": [],
+        "no_ats_found": [],
+        "added_ashby_slugs": {},
+        "added_greenhouse_slugs": {},
     }
