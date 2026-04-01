@@ -575,26 +575,35 @@ if nav == "📡 Sources":
                     except Exception:
                         pass
 
-            # ── Show feedback ─────────────────────────────────────────────
-            for _j in _jobs_added:
-                st.success(f"Job added to Open Roles: **{_j}**")
-            for _j in _jobs_failed:
-                st.error(f"Could not parse job link: {_j}")
-            if _manual_existing:
-                st.info(f"Already tracked: {', '.join(_manual_existing)}")
+            # ── Store feedback in session state so it persists across rerun ──
+            st.session_state["manual_jobs_added"] = _jobs_added
+            st.session_state["manual_jobs_failed"] = _jobs_failed
+            st.session_state["manual_existing"] = _manual_existing
 
             if _manual_added:
                 st.session_state["pipeline_queue"] = _manual_added
                 st.session_state["pipeline_source"] = "manual"
                 st.session_state["pipeline_already_tracked"] = _manual_existing
                 st.session_state.pop("pipeline_result", None)
-                st.cache_data.clear()
-                st.rerun()
-            elif _jobs_added:
-                st.cache_data.clear()
-                st.rerun()
-            elif not _manual_existing and not _jobs_failed:
-                st.warning("Nothing recognised — try a company name or a full job URL.")
+            st.cache_data.clear()
+            st.rerun()
+
+    # ── Show persistent feedback ──────────────────────────────────────────
+    _mja = st.session_state.get("manual_jobs_added", [])
+    _mjf = st.session_state.get("manual_jobs_failed", [])
+    _mje = st.session_state.get("manual_existing", [])
+    if _mja or _mjf or _mje:
+        for _j in _mja:
+            st.success(f"Added to Open Roles: **{_j}**")
+        for _j in _mjf:
+            st.error(f"Could not parse job link: {_j}")
+        if _mje:
+            st.info(f"Already tracked: {', '.join(_mje)}")
+        if st.button("✕ Clear", key="manual_feedback_clear"):
+            st.session_state.pop("manual_jobs_added", None)
+            st.session_state.pop("manual_jobs_failed", None)
+            st.session_state.pop("manual_existing", None)
+            st.rerun()
 
     _render_pipeline_runner("manual")
 
