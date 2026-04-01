@@ -244,8 +244,19 @@ def _process_one_company(name: str, rescore: bool = False, force_search: bool = 
         roles = _web_search_careers(name, co["id"])
 
     if roles:
+        # Ensure all jobs from this company have correct company_id and company_name
+        jobs = supabase.table("jobs").select("id").eq("company_name", name).is_("company_id", "null").execute().data
+        if not jobs:
+            # Also check lowercase/slug variants
+            jobs = supabase.table("jobs").select("id").ilike("company_name", name).is_("company_id", "null").execute().data
+        for j in (jobs or []):
+            supabase.table("jobs").update({
+                "company_id": co["id"],
+                "company_name": name,
+            }).eq("id", j["id"]).execute()
         return {"status": "open_roles", "company": name, "roles": roles}
     else:
+        # On Radar: always generate outreach draft
         if not co.get("relationship_message"):
             draft = generate_relationship_message(
                 name,
