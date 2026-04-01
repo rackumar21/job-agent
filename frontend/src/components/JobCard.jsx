@@ -106,20 +106,20 @@ export default function JobCard({ job, onStatusChange }) {
 
         {/* Skip form */}
         {showSkip && (
-          <div className="bg-red-50 rounded-lg p-3 space-y-2 border border-red-100">
-            <p className="text-xs font-medium text-red-700">Why skip?</p>
+          <div className="bg-gray-50 rounded-lg p-3 space-y-2 border border-gray-200">
+            <p className="text-xs font-medium text-gray-500">Why skip?</p>
             <input
               type="text"
               value={skipReason}
               onChange={e => setSkipReason(e.target.value)}
               placeholder="e.g. too infra-heavy"
-              className="border border-red-200 rounded-lg px-2 py-1.5 text-xs w-full bg-white focus:outline-none focus:ring-1 focus:ring-red-200"
+              className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs w-full bg-white focus:outline-none focus:ring-1 focus:ring-gray-300"
               autoFocus
             />
             <div className="flex gap-2">
               <button onClick={confirmSkip} disabled={loading}
-                className="text-xs px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 font-medium transition-colors disabled:opacity-40">
-                Confirm skip
+                className="text-xs px-3 py-1.5 rounded-lg bg-gray-600 text-white hover:bg-gray-700 font-medium transition-colors disabled:opacity-40">
+                Skip
               </button>
               <button onClick={() => { setShowSkip(false); setSkipReason('') }}
                 className="text-xs px-3 py-1.5 rounded-lg bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 font-medium transition-colors">
@@ -136,7 +136,7 @@ export default function JobCard({ job, onStatusChange }) {
         <div className="flex items-center gap-1.5 w-full">
           <ActionBtn className="flex-1" onClick={() => updateStatus('pipeline')} disabled={loading}>Pipeline</ActionBtn>
           <ActionBtn className="flex-1" onClick={() => updateStatus('reached_out')} disabled={loading || reachedOut} dimmed={reachedOut}>
-            {reachedOut ? 'Sent ✓' : 'Outreach'}
+            {reachedOut ? 'Sent ✓' : 'Reached Out'}
           </ActionBtn>
           <ActionBtn className="flex-1" onClick={() => updateStatus('applied')} disabled={loading}>Applied</ActionBtn>
         </div>
@@ -144,7 +144,7 @@ export default function JobCard({ job, onStatusChange }) {
         <div className="flex items-center justify-between">
           {!showSkip
             ? <button onClick={() => setShowSkip(true)} disabled={loading}
-                className="text-[11px] text-gray-400 hover:text-red-500 transition-colors">
+                className="text-[11px] text-gray-300 hover:text-gray-500 transition-colors">
                 Not a fit? Skip
               </button>
             : <span />
