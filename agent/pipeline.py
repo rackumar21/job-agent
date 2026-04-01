@@ -171,7 +171,7 @@ No markdown, no explanation."""}],
         return []
 
 
-def _process_one_company(name: str, rescore: bool = False) -> dict:
+def _process_one_company(name: str, rescore: bool = False, force_search: bool = False) -> dict:
     """Process a single company through the full pipeline."""
     from agent.discover_from_rss import score_company_for_radar, generate_relationship_message
     from agent.discover import poll_specific_companies
@@ -206,8 +206,8 @@ def _process_one_company(name: str, rescore: bool = False) -> dict:
             updates["stage"] = scored["stage"]
         supabase.table("companies").update(updates).eq("id", co["id"]).execute()
 
-    # Step 2: Low-scoring companies still go to Radar (with details) but skip job search
-    if attn < RADAR_THRESHOLD:
+    # Step 2: Low-scoring companies skip job search (unless manually added)
+    if attn < RADAR_THRESHOLD and not force_search:
         return {"status": "radar", "company": name, "score": attn}
 
     # Step 2b: Auto-discover ATS slugs if missing
@@ -260,10 +260,11 @@ def _process_one_company(name: str, rescore: bool = False) -> dict:
         return {"status": "radar", "company": name, "score": attn}
 
 
-def run_pipeline_for_companies(company_names: list, rescore: bool = False) -> dict:
+def run_pipeline_for_companies(company_names: list, rescore: bool = False, force_search: bool = True) -> dict:
     """
     Run the full pipeline for a specific list of companies (by name).
     Processes up to 4 companies in parallel for speed.
+    force_search=True (default for manual runs): always search for jobs even if score is low.
     """
     from agent.score import score_new_jobs
 
@@ -272,7 +273,7 @@ def run_pipeline_for_companies(company_names: list, rescore: bool = False) -> di
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         future_to_name = {
-            pool.submit(_process_one_company, name, rescore): name
+            pool.submit(_process_one_company, name, rescore, force_search): name
             for name in company_names
         }
         for future in as_completed(future_to_name):
