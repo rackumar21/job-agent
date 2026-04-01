@@ -245,15 +245,19 @@ def _process_one_company(name: str, rescore: bool = False, force_search: bool = 
 
     if roles:
         # Ensure all jobs from this company have correct company_id and company_name
-        jobs = supabase.table("jobs").select("id").eq("company_name", name).is_("company_id", "null").execute().data
-        if not jobs:
-            # Also check lowercase/slug variants
-            jobs = supabase.table("jobs").select("id").ilike("company_name", name).is_("company_id", "null").execute().data
-        for j in (jobs or []):
-            supabase.table("jobs").update({
-                "company_id": co["id"],
-                "company_name": name,
-            }).eq("id", j["id"]).execute()
+        # Check by proper name, slug variants, and any case variation
+        slug_variants = set([name, name.lower(), name.lower().replace(" ", ""), name.lower().replace(" ", "-")])
+        if ashby_slug: slug_variants.add(ashby_slug)
+        if greenhouse_slug: slug_variants.add(greenhouse_slug)
+        if lever_slug: slug_variants.add(lever_slug)
+        if workable_slug: slug_variants.add(workable_slug)
+        for variant in slug_variants:
+            orphans = supabase.table("jobs").select("id").ilike("company_name", variant).is_("company_id", "null").execute().data
+            for j in (orphans or []):
+                supabase.table("jobs").update({
+                    "company_id": co["id"],
+                    "company_name": name,
+                }).eq("id", j["id"]).execute()
         return {"status": "open_roles", "company": name, "roles": roles}
     else:
         # On Radar: always generate outreach draft

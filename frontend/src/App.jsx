@@ -30,17 +30,17 @@ const HOW_CARDS = [
   {
     icon: '🔍',
     title: 'Discovers companies automatically',
-    body: 'Every Monday, I pull open roles from Ashby and Greenhouse across 100+ tracked companies. The agent also scans funding news, LinkedIn hiring posts, and newsletters to surface new AI-native companies.',
+    body: 'Every Monday, I pull open roles from Ashby, Greenhouse, Lever, and Workable across 100+ tracked companies. The agent also scans funding news, LinkedIn hiring posts, and newsletters to surface new AI-native companies.',
   },
   {
     icon: '📊',
     title: 'Scores every role with Claude',
-    body: 'A keyword pre-filter runs first at zero LLM cost: roles below 30/100 are dropped. The rest are scored on 5 dimensions with Claude Sonnet: role fit (30%), company fit (25%), end-user layer (20%), growth signal (15%), location (10%). Scoring learns from actions: applied roles become benchmarks, skipped roles teach the filter.',
+    body: 'A keyword pre-filter runs first: roles below 30/100 are dropped. The rest are scored on 5 dimensions with Claude Sonnet: role fit (30%), company fit (25%), end-user layer (20%), growth signal (15%), location (10%). Scoring learns from actions: applied roles become benchmarks, skipped roles teach the filter.',
   },
   {
     icon: '🗂️',
     title: 'Routes to Open Roles or On Radar',
-    body: 'Roles scoring 75+ go to Open Roles; 55-74 land in Borderline. Companies with no open PM roles go to On Radar. Every radar company gets a drafted outreach in my voice.',
+    body: 'Roles scoring 55+ go to Open Roles, ranked by fit score. Companies with no open PM roles go to On Radar. Every radar company gets a drafted outreach in my voice.',
   },
   {
     icon: '✅',

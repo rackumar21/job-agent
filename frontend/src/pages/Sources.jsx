@@ -286,7 +286,7 @@ export default function Sources() {
       <div className="card p-4 flex items-center gap-4">
         <div className="flex-1">
           <div className="text-sm font-semibold text-gray-900">Run Full Pipeline</div>
-          <div className="text-xs text-gray-400 mt-0.5">Manually trigger the weekly agent run. Polls all 100+ tracked companies on Ashby and Greenhouse, scores new jobs with Claude, and updates Open Roles and On Radar. Normally runs automatically every Monday.</div>
+          <div className="text-xs text-gray-400 mt-0.5">Manually trigger the weekly agent run. Polls all 100+ tracked companies across Ashby, Greenhouse, Lever, and Workable, scores new jobs with Claude, and updates Open Roles and On Radar. Normally runs automatically every Monday.</div>
         </div>
         <button className="btn-primary" onClick={runPipeline} disabled={running}>
           {running ? 'Running...' : 'Run Pipeline'}
@@ -369,6 +369,8 @@ export default function Sources() {
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Job boards</div>
             <div><span className="text-sm font-medium text-gray-800">Ashby</span> <span className="text-gray-400 text-xs">· 50+ verified company slugs</span></div>
             <div><span className="text-sm font-medium text-gray-800">Greenhouse</span> <span className="text-gray-400 text-xs">· 10+ verified company slugs</span></div>
+            <div><span className="text-sm font-medium text-gray-800">Lever</span> <span className="text-gray-400 text-xs">· auto-discovered per company</span></div>
+            <div><span className="text-sm font-medium text-gray-800">Workable</span> <span className="text-gray-400 text-xs">· auto-discovered per company</span></div>
             <div><span className="text-sm font-medium text-gray-800">Work at a Startup</span> <span className="text-gray-400 text-xs">· YC company list via Apify</span></div>
             <div className="text-xs text-gray-400 pt-1">Polled every Monday 9am PT</div>
           </div>
