@@ -58,17 +58,7 @@ Green flags: founder-adjacent scope, direct customer contact, AI-first product c
 Red flags: PM = roadmap manager, big tech bureaucracy, no end-user layer
 """
 
-SCORING_PROMPT = """You are evaluating a job posting for Rachita Kumar. Score this role on a 0-100 scale.
-
-CANDIDATE PROFILE:
-{profile}
-
-JOB:
-Company: {company}
-Title: {title}
-Role type: {role_type}
-Job description:
-{jd}
+SCORING_INSTRUCTIONS = """Score a job posting for Rachita Kumar on a 0-100 scale.
 
 Score on these 5 dimensions (weights shown):
 
@@ -115,7 +105,10 @@ Sector definitions:
 - stage: one of "Seed" | "Series A" | "Series B" | "Series C" | "Series D" | "Growth" | "Public" | "" (empty if unknown)
 
 Return ONLY valid JSON, no markdown, no explanation:
-{{"role_fit": <int 0-30>, "company_fit": <int 0-25>, "end_user_layer": <int 0-20>, "growth_signal": <int 0-15>, "location_fit": <int 0-10>, "total": <sum of above>, "ats_gaps": [<string>], "key_angle": "<string>", "red_flags": [<string>], "recommendation": "<apply|borderline|skip>", "reasoning": "<2-3 sentences plain English>", "sector": "<string>", "stage": "<string>"}}"""
+{"role_fit": <int 0-30>, "company_fit": <int 0-25>, "end_user_layer": <int 0-20>, "growth_signal": <int 0-15>, "location_fit": <int 0-10>, "total": <sum of above>, "ats_gaps": [<string>], "key_angle": "<string>", "red_flags": [<string>], "recommendation": "<apply|borderline|skip>", "reasoning": "<2-3 sentences plain English>", "sector": "<string>", "stage": "<string>"}"""
+
+# Keep the old name as an alias so callers of the old format still work
+SCORING_PROMPT = SCORING_INSTRUCTIONS
 
 
 def fetch_behavioral_signals() -> str:
@@ -160,6 +153,70 @@ def fetch_unscored_jobs(limit: int = 20):
     return res.data or []
 
 
+# ---------------------------------------------------------------------------
+# Two-stage scoring — keyword pre-filter (Stage 1) before Claude (Stage 2)
+# ---------------------------------------------------------------------------
+
+_QUICK_HARD_NO = [
+    # Engineering / infra roles — exclude on title match
+    "software engineer", " swe ", "data engineer", "data scientist",
+    "machine learning engineer", "ml engineer", "infrastructure engineer",
+    "devops", "site reliability", " sre ", "security engineer",
+    "cybersecurity engineer", "penetration test",
+    # Clinical / medical
+    "clinical", "physician", "radiolog", "drug discovery", "medical doctor",
+    # Defense
+    "defense", "military", "dod ",
+    # Seniority mismatches
+    "associate product manager", " apm ", "rotational pm",
+]
+
+_QUICK_PM_TITLE = [
+    "product manager", "senior pm", "staff pm", "group pm", "principal pm",
+    "product lead", "head of product", "vp of product",
+]
+
+_QUICK_OPS_TITLE = [
+    "strategy", "operations", "chief of staff", "go-to-market", "gtm",
+    "growth", "revenue", "commercial", "customer success", "account",
+    "launch", "bizops",
+]
+
+_QUICK_DOMAIN_SIGNALS = [
+    "ai", "llm", "agent", "voice", "automation", "enterprise", "b2b",
+    "fintech", "payment", "checkout", "legal", "saas", "platform",
+]
+
+
+def quick_score(title: str, jd: str) -> int:
+    """
+    Stage 1: Zero-cost keyword pre-filter. Returns 0-100.
+    If score < 30, skip Claude entirely — obvious mismatch.
+    """
+    title_lower = title.lower()
+    text = (title_lower + " " + (jd or "").lower())
+
+    # Hard no on title
+    if any(k in title_lower for k in _QUICK_HARD_NO):
+        return 0
+
+    score = 25  # base — job made it through seniority/no-list filters upstream
+
+    # Title match
+    if any(k in title_lower for k in _QUICK_PM_TITLE):
+        score += 35
+    elif any(k in title_lower for k in _QUICK_OPS_TITLE):
+        score += 20
+    else:
+        score += 5  # Unknown title type — let Claude decide
+
+    # Domain signal boost (up to +15)
+    domain_hits = sum(1 for k in _QUICK_DOMAIN_SIGNALS if k in text)
+    score += min(15, domain_hits * 3)
+
+    return min(100, score)
+
+
 def score_job(job: dict) -> dict:
     title = job["title"]
     company = job["company_name"]
@@ -167,26 +224,55 @@ def score_job(job: dict) -> dict:
     role_type = (job.get("score_breakdown") or {}).get("role_type", "pm")
 
     behavioral = fetch_behavioral_signals()
-    profile_with_signals = RACHITA_PROFILE
-    if behavioral:
-        profile_with_signals += f"\n\nBEHAVIORAL SIGNALS (learned from her actions — use these to calibrate scores):\n{behavioral}"
 
-    prompt = SCORING_PROMPT.format(
-        profile=profile_with_signals,
-        company=company,
-        title=title,
-        role_type=role_type,
-        jd=jd[:3500],
-    )
+    # ── Stage 1: keyword pre-filter (free) ──────────────────────────────
+    qs = quick_score(title, jd)
+    if qs < 30:
+        # Return a synthetic skip result — no Claude call needed
+        return {
+            "role_fit": 0, "company_fit": 0, "end_user_layer": 0,
+            "growth_signal": 0, "location_fit": 5, "total": 5,
+            "ats_gaps": [], "key_angle": "",
+            "red_flags": [f"Quick filter: title '{title}' is not a PM/ops role"],
+            "recommendation": "skip",
+            "reasoning": f"Keyword pre-filter: title does not match PM/ops profile (score {qs}/100). Skipped without LLM call.",
+            "sector": "Other", "stage": "",
+        }
+
+    # ── Stage 2: Claude scoring with prompt caching ──────────────────────
+    # Static content (profile + scoring instructions) → system prompt, cached
+    # Dynamic content (job details + behavioral signals) → user message
+    system_content = f"""You are a job fit scorer for Rachita Kumar.
+
+{RACHITA_PROFILE}
+
+{SCORING_INSTRUCTIONS}"""
+
+    user_content = f"""Score this job:
+
+Company: {company}
+Title: {title}
+Role type: {role_type}
+Job description:
+{jd[:3500]}
+
+Behavioral signals (from Rachita's actions — use to calibrate scores):
+{behavioral or "None yet."}
+
+Return ONLY valid JSON, no markdown."""
 
     message = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=800,
-        messages=[{"role": "user", "content": prompt}],
+        system=[{
+            "type": "text",
+            "text": system_content,
+            "cache_control": {"type": "ephemeral"},
+        }],
+        messages=[{"role": "user", "content": user_content}],
     )
 
     raw = message.content[0].text.strip()
-    # Strip markdown code fences if present
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):

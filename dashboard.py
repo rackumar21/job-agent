@@ -899,6 +899,110 @@ elif nav == "📂 Open Roles":
                         if job_url:
                             st.link_button("↗ View", job_url, use_container_width=True)
 
+                    # ── Notes ────────────────────────────────────────────
+                    _notes_key = f"notes_{job_id}"
+                    _existing_notes = bd.get("notes", "")
+                    def _save_notes_or(jid=job_id, snap=dict(bd)):
+                        val = st.session_state.get(f"notes_{jid}", "")
+                        snap["notes"] = val
+                        supabase.table("jobs").update({"score_breakdown": snap}).eq("id", jid).execute()
+                        st.cache_data.clear()
+                    st.text_input(
+                        "", value=_existing_notes, key=_notes_key,
+                        placeholder="Add notes (saved automatically)...",
+                        label_visibility="collapsed",
+                        on_change=_save_notes_or,
+                    )
+
+                    # ── ATS Analysis ─────────────────────────────────────
+                    _ats_report = bd.get("ats_report")
+                    _ats_col1, _ats_col2 = st.columns([2, 5])
+                    with _ats_col1:
+                        if st.button("🔍 ATS Analysis", key=f"ats_{job_id}", use_container_width=True):
+                            _jd = job.get("jd_text", "")
+                            if not _jd:
+                                st.warning("No JD text stored for this role. View the posting to get full analysis.")
+                            else:
+                                with st.spinner("Analyzing resume vs JD..."):
+                                    from agent.ats import analyze_ats
+                                    _ats_result = analyze_ats(title, company, _jd)
+                                if "error" not in _ats_result:
+                                    _bd_update = dict(bd)
+                                    _bd_update["ats_report"] = _ats_result
+                                    supabase.table("jobs").update({"score_breakdown": _bd_update}).eq("id", job_id).execute()
+                                    st.cache_data.clear()
+                                    st.rerun()
+                                else:
+                                    st.error(_ats_result["error"])
+
+                    if _ats_report and "error" not in _ats_report:
+                        with _ats_col2:
+                            _ats_score = _ats_report.get("ats_score", 0)
+                            _ats_bg = "#16a34a" if _ats_score >= 75 else ("#ca8a04" if _ats_score >= 55 else "#dc2626")
+                            st.markdown(
+                                f'<span style="display:inline-flex;align-items:center;gap:8px">'
+                                f'<span class="sbadge" style="background:{_ats_bg};width:32px;height:32px;font-size:0.72rem">{_ats_score}</span>'
+                                f'<span style="font-size:0.85em;color:#374151">ATS score</span>'
+                                f'</span>',
+                                unsafe_allow_html=True,
+                            )
+
+                    if _ats_report and "error" not in _ats_report:
+                        with st.expander("ATS Analysis details", expanded=False):
+                            _sum = _ats_report.get("summary", "")
+                            if _sum:
+                                st.caption(_sum)
+
+                            _miss = _ats_report.get("missing_keywords", [])
+                            _strong = _ats_report.get("strong_matches", [])
+                            _mcol, _scol = st.columns(2)
+                            with _mcol:
+                                st.markdown("**Missing keywords**")
+                                if _miss:
+                                    st.markdown(" ".join(
+                                        f'<span style="background:#fee2e2;color:#991b1b;border-radius:4px;padding:2px 7px;font-size:0.77em;margin:2px;display:inline-block">{k}</span>'
+                                        for k in _miss
+                                    ), unsafe_allow_html=True)
+                                else:
+                                    st.caption("None — good coverage")
+                            with _scol:
+                                st.markdown("**Strong matches**")
+                                for s in _strong:
+                                    st.markdown(f"✓ {s}")
+
+                            _rewrites = _ats_report.get("rewrite_suggestions", [])
+                            if _rewrites:
+                                st.markdown("**Top rewrite suggestions**")
+                                for r in _rewrites:
+                                    st.markdown(
+                                        f'<div style="background:#f9fafb;border-radius:6px;padding:10px;margin:6px 0">'
+                                        f'<div style="color:#9ca3af;font-size:0.82em;margin-bottom:4px">Original</div>'
+                                        f'<div style="font-size:0.88em;margin-bottom:8px">{html_lib.escape(r.get("original",""))}</div>'
+                                        f'<div style="color:#16a34a;font-size:0.82em;margin-bottom:4px">Rewritten</div>'
+                                        f'<div style="font-size:0.88em;font-weight:500;margin-bottom:6px">{html_lib.escape(r.get("rewritten",""))}</div>'
+                                        f'<div style="color:#6b7280;font-size:0.78em">{html_lib.escape(r.get("reason",""))}</div>'
+                                        f'</div>',
+                                        unsafe_allow_html=True,
+                                    )
+
+                            _angles = _ats_report.get("cover_letter_angles", [])
+                            if _angles:
+                                st.markdown("**Cover letter angles**")
+                                for a in _angles:
+                                    st.markdown(f"→ {a}")
+
+                            _gaps = _ats_report.get("gaps", [])
+                            if _gaps:
+                                st.markdown("**Gaps**")
+                                for g in _gaps:
+                                    sev = g.get("severity", "medium")
+                                    sev_color = {"high": "#dc2626", "medium": "#ca8a04", "low": "#6b7280"}.get(sev, "#6b7280")
+                                    st.markdown(
+                                        f'<span style="color:{sev_color};font-size:0.78em;font-weight:600;text-transform:uppercase">{sev}</span> '
+                                        f'{html_lib.escape(g.get("gap",""))} — <em>{html_lib.escape(g.get("recommendation",""))}</em>',
+                                        unsafe_allow_html=True,
+                                    )
+
 
 # ===========================================================================
 # PIPELINE
@@ -1000,6 +1104,50 @@ elif nav == "📋 Pipeline":
                         st.text_area(
                             "", value=st.session_state[gk], height=200,
                             key=f"out_gen_{job['id']}", label_visibility="collapsed",
+                        )
+
+                st.markdown("---")
+
+                # ── Notes ────────────────────────────────────────────────
+                _pnk = f"pipe_notes_{job['id']}"
+                def _save_pipe_notes(jid=job["id"], snap=dict(bd)):
+                    snap["notes"] = st.session_state.get(f"pipe_notes_{jid}", "")
+                    supabase.table("jobs").update({"score_breakdown": snap}).eq("id", jid).execute()
+                    st.cache_data.clear()
+                st.text_input(
+                    "Notes", value=bd.get("notes", ""), key=_pnk,
+                    placeholder="Interview status, recruiter name, next step...",
+                    on_change=_save_pipe_notes,
+                )
+
+                # ── ATS Analysis ─────────────────────────────────────────
+                _p_ats = bd.get("ats_report")
+                _pa1, _pa2 = st.columns([2, 5])
+                with _pa1:
+                    if st.button("🔍 ATS Analysis", key=f"pats_{job['id']}", use_container_width=True):
+                        _jd = job.get("jd_text", "")
+                        if not _jd:
+                            st.warning("No JD text stored for this role.")
+                        else:
+                            with st.spinner("Analyzing resume vs JD..."):
+                                from agent.ats import analyze_ats
+                                _r = analyze_ats(job["title"], job["company_name"], _jd)
+                            if "error" not in _r:
+                                _snap = dict(bd); _snap["ats_report"] = _r
+                                supabase.table("jobs").update({"score_breakdown": _snap}).eq("id", job["id"]).execute()
+                                st.cache_data.clear(); st.rerun()
+                            else:
+                                st.error(_r["error"])
+                if _p_ats and "error" not in _p_ats:
+                    with _pa2:
+                        _s = _p_ats.get("ats_score", 0)
+                        _bg = "#16a34a" if _s >= 75 else ("#ca8a04" if _s >= 55 else "#dc2626")
+                        st.markdown(
+                            f'<span style="display:inline-flex;align-items:center;gap:8px">'
+                            f'<span class="sbadge" style="background:{_bg};width:32px;height:32px;font-size:0.72rem">{_s}</span>'
+                            f'<span style="font-size:0.85em;color:#374151">ATS score · {_p_ats.get("summary","")[:80]}...</span>'
+                            f'</span>',
+                            unsafe_allow_html=True,
                         )
 
 
