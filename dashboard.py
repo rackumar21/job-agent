@@ -475,8 +475,8 @@ if nav == "📡 Sources":
 
 <div style="background:#f9fafb; border-radius:8px; padding:14px">
 <div style="font-size:1.2em; margin-bottom:6px">🏢 Job boards</div>
-<b>Ashby</b> · 30+ verified company slugs<br>
-<b>Greenhouse</b> · 10+ verified company slugs<br>
+<b>Ashby</b> · 49 verified company slugs<br>
+<b>Greenhouse</b> · 12 verified company slugs<br>
 <b>Work at a Startup</b> · YC company list via Apify<br>
 <b>LinkedIn</b> · job board monitored via Apify<br>
 <span style="color:#6b7280; font-size:0.85em">Polled every Monday 9am PT</span>
