@@ -153,7 +153,7 @@ export default function App() {
             <NavTab to="/" end>Open Roles</NavTab>
             <NavTab to="/on-radar">On Radar</NavTab>
             <NavTab to="/pipeline">Pipeline</NavTab>
-            <NavTab to="/reached-out">Reached Out</NavTab>
+            <NavTab to="/reached-out">Outreach</NavTab>
             <NavTab to="/applied">Applied</NavTab>
             <NavTab to="/sources">Sources</NavTab>
           </nav>

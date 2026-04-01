@@ -136,7 +136,7 @@ export default function JobCard({ job, onStatusChange }) {
         <div className="flex items-center gap-1.5 w-full">
           <ActionBtn className="flex-1" onClick={() => updateStatus('pipeline')} disabled={loading}>Pipeline</ActionBtn>
           <ActionBtn className="flex-1" onClick={() => updateStatus('reached_out')} disabled={loading || reachedOut} dimmed={reachedOut}>
-            {reachedOut ? 'Sent ✓' : 'Reached Out'}
+            {reachedOut ? 'Sent ✓' : 'Outreach'}
           </ActionBtn>
           <ActionBtn className="flex-1" onClick={() => updateStatus('applied')} disabled={loading}>Applied</ActionBtn>
         </div>
