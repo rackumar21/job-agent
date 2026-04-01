@@ -89,6 +89,22 @@ st.markdown("""
 .tag { background: #f3f4f6; border-radius: 4px; padding: 2px 8px; font-size: 0.8em; margin-right: 4px; }
 /* Remove default Streamlit top padding */
 .block-container { padding-top: 1rem !important; }
+/* Job card score badge */
+.sbadge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px; border-radius: 50%;
+    color: white; font-weight: 700; font-size: 0.8rem;
+    flex-shrink: 0; vertical-align: middle;
+}
+.sbadge-high { background: #16a34a; }
+.sbadge-mid  { background: #ca8a04; }
+.sbadge-low  { background: #dc2626; }
+.sbadge-none { background: #e5e7eb; color: #9ca3af; }
+/* Score dims row */
+.dims { margin-left: 48px; margin-bottom: 10px; line-height: 1.6; }
+.dim-lbl { color: #9ca3af; font-size: 0.77em; }
+.dim-val { font-weight: 600; color: #374151; font-size: 0.77em; }
+.dim-sep { color: #d1d5db; font-size: 0.77em; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -141,6 +157,36 @@ def fmt_date_mdy(iso_or_str: str) -> str:
         return dt.strftime("%-m/%-d/%y")
     except Exception:
         return iso_or_str[:10]
+
+
+def _rel_date(iso_str: str) -> str:
+    """Return relative date string like '2d ago', '1w ago', 'today'."""
+    if not iso_str:
+        return ""
+    try:
+        dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        delta = datetime.now(timezone.utc) - dt
+        days = delta.days
+        if days == 0:
+            return "today"
+        elif days == 1:
+            return "1d ago"
+        elif days < 7:
+            return f"{days}d ago"
+        elif days < 14:
+            return "1w ago"
+        else:
+            return f"{days // 7}w ago"
+    except Exception:
+        return ""
+
+
+def _score_badge(score) -> str:
+    """Return HTML for a colored circular score badge."""
+    if not score:
+        return '<span class="sbadge sbadge-none">--</span>'
+    cls = "sbadge-high" if score >= 75 else ("sbadge-mid" if score >= 55 else "sbadge-low")
+    return f'<span class="sbadge {cls}">{score}</span>'
 
 
 def update_job_status(job_id, new_status):
@@ -739,89 +785,102 @@ elif nav == "📂 Open Roles":
         def best_score(cjobs):
             return max(j.get("attractiveness_score") or 0 for j in cjobs)
 
-        def is_new(cjobs):
+        def is_new_co(cjobs):
             return any(j.get("id") in _this_week_job_ids for j in cjobs)
 
-        sorted_companies = sorted(by_company.items(), key=lambda x: (is_new(x[1]), best_score(x[1])), reverse=True)
+        sorted_companies = sorted(by_company.items(), key=lambda x: (is_new_co(x[1]), best_score(x[1])), reverse=True)
 
         for company, company_jobs in sorted_companies:
-            best = best_score(company_jobs)
+            best       = best_score(company_jobs)
+            is_new     = is_new_co(company_jobs)
             role_count = len(company_jobs)
 
-            badge = "🟢" if best >= 75 else ("🟡" if best >= 55 else ("🔴" if best > 0 else "⚪"))
-
+            badge     = "🟢" if best >= 75 else ("🟡" if best >= 55 else ("🔴" if best > 0 else "⚪"))
             co_record = company_lookup.get(company, {})
             co_sector = company_jobs[0]["_sector"]
             co_stage  = company_jobs[0]["_stage"]
+            co_what   = co_record.get("what_they_do", "")
 
-            is_new = any(j.get("id") in _this_week_job_ids for j in company_jobs)
             label = f"{badge} **{company}**"
-            if is_new:
-                label += " · 🆕"
-            if co_sector:
-                label += f" · {co_sector}"
-            if co_stage:
-                label += f" · {co_stage}"
-            if best > 0:
-                label += f" · `{best}/100`"
-            if role_count > 1:
-                label += f" · {role_count} roles"
+            extras = []
+            if is_new:        extras.append("🆕")
+            if co_sector:     extras.append(co_sector)
+            if co_stage:      extras.append(co_stage)
+            if role_count > 1: extras.append(f"{role_count} roles")
+            if extras:        label += " · " + " · ".join(extras)
 
-            with st.expander(label):
-                co_what = co_record.get("what_they_do", "")
+            with st.expander(label, expanded=False):
                 if co_what:
                     st.caption(co_what)
 
-                for job in company_jobs:
-                    score  = job.get("attractiveness_score")
-                    bd     = job.get("score_breakdown") or {}
-                    title  = job["title"]
-                    job_id = job["id"]
-                    job_url = job.get("url", "")
+                for idx, job in enumerate(company_jobs):
+                    if idx > 0:
+                        st.markdown(
+                            "<div style='border-top:1px solid #f3f4f6;margin:8px 0'></div>",
+                            unsafe_allow_html=True,
+                        )
+
+                    score          = job.get("attractiveness_score")
+                    bd             = job.get("score_breakdown") or {}
+                    title          = job["title"]
+                    job_id         = job["id"]
+                    job_url        = job.get("url", "")
                     reached_out_at = bd.get("reached_out_at")
+                    date_str       = _rel_date(job.get("created_at", ""))
 
-                    if score and score >= 75:
-                        score_html = f'<span class="score-high">{score}/100</span>'
-                    elif score and score >= 55:
-                        score_html = f'<span class="score-mid">{score}/100</span>'
-                    elif score:
-                        score_html = f'<span class="score-low">{score}/100</span>'
-                    else:
-                        score_html = '<span class="score-none">unscored</span>'
-
+                    # Title row: score badge + title
                     safe_title = html_lib.escape(title)
                     st.markdown(
-                        f"<strong>{safe_title}</strong> &nbsp; {score_html}",
+                        f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">'
+                        f'{_score_badge(score)}'
+                        f'<strong style="font-size:1rem;line-height:1.3">{safe_title}</strong>'
+                        f'</div>',
                         unsafe_allow_html=True,
                     )
 
+                    # Score dimensions row (inline, below title)
                     if score:
-                        with st.expander("Score breakdown"):
-                            cols = st.columns(5)
-                            cols[0].metric("Role fit",  f"{bd.get('role_fit','?')}/30")
-                            cols[1].metric("Company",   f"{bd.get('company_fit','?')}/25")
-                            cols[2].metric("End-user",  f"{bd.get('end_user_layer','?')}/20")
-                            cols[3].metric("Growth",    f"{bd.get('growth_signal','?')}/15")
-                            cols[4].metric("Location",  f"{bd.get('location_fit','?')}/10")
+                        dim_map = [
+                            ("Role",   bd.get("role_fit"),       "/30"),
+                            ("Co",     bd.get("company_fit"),    "/25"),
+                            ("User",   bd.get("end_user_layer"), "/20"),
+                            ("Growth", bd.get("growth_signal"),  "/15"),
+                            ("Loc",    bd.get("location_fit"),   "/10"),
+                        ]
+                        sep = ' <span class="dim-sep">&nbsp;·&nbsp;</span> '
+                        parts = sep.join(
+                            f'<span class="dim-lbl">{lbl}</span> <span class="dim-val">{val}{suf}</span>'
+                            for lbl, val, suf in dim_map if val is not None
+                        )
+                        if date_str:
+                            parts += f'{sep}<span class="dim-lbl">{date_str}</span>'
+                        st.markdown(
+                            f'<div class="dims">{parts}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    elif date_str:
+                        st.caption(date_str)
 
                     # Action buttons
-                    btn_cols = st.columns([1, 1.3, 1, 1, 0.7])
-                    with btn_cols[0]:
-                        if st.button("➕ Pipeline", key=f"pipe_{job_id}"):
+                    bc1, bc2, bc3, bc4, bc5 = st.columns([1.2, 1.5, 1.2, 1, 0.8])
+                    with bc1:
+                        if st.button("➕ Pipeline", key=f"pipe_{job_id}", use_container_width=True):
                             update_job_status(job_id, "pipeline")
                             st.toast(f"Added {company} to pipeline")
-                    with btn_cols[1]:
+                    with bc2:
                         ro_sent = bool(reached_out_at)
-                        ro_label = "📧 Sent ✓" if ro_sent else "📧 Reached out"
-                        if st.button(ro_label, key=f"ro_{job_id}", disabled=ro_sent):
+                        if st.button(
+                            "📧 Sent ✓" if ro_sent else "📧 Reached out",
+                            key=f"ro_{job_id}", disabled=ro_sent, use_container_width=True,
+                        ):
                             mark_reached_out(job_id, bd)
                             st.toast("Marked as reached out. Follow-up reminder in 3 days.")
-                    with btn_cols[2]:
-                        if st.button("✅ Applied", key=f"applied_{job_id}"):
+                    with bc3:
+                        if st.button("✅ Applied", key=f"applied_{job_id}", use_container_width=True):
                             mark_applied(job_id, bd)
-                            st.toast(f"Marked {company} as applied")
-                    with btn_cols[3]:
-                        with st.popover("❌ Skip"):
+                            st.toast(f"Applied to {company}")
+                    with bc4:
+                        with st.popover("✕ Skip", use_container_width=True):
                             skip_reason = st.text_input(
                                 "Reason (optional)",
                                 key=f"sr_{job_id}",
@@ -836,11 +895,9 @@ elif nav == "📂 Open Roles":
                                     ).eq("id", job_id).execute()
                                 update_job_status(job_id, "skip")
                                 st.toast("Skipped")
-                    with btn_cols[4]:
+                    with bc5:
                         if job_url:
-                            st.link_button("↗ View", job_url)
-
-                    st.markdown("---")
+                            st.link_button("↗ View", job_url, use_container_width=True)
 
 
 # ===========================================================================
@@ -1228,6 +1285,11 @@ elif nav == "🔭 On Radar":
                 "reached_out": "✉️ ", "in_conversation": "💬 ", "applied": "✅ "
             }.get(status or "", "")
 
+            # Radar badge: use score-based emoji color
+            radar_badge = "🟢" if (score or 0) >= 80 else ("🟡" if (score or 0) >= 60 else "🔵")
+            if not status_emoji:
+                status_emoji = radar_badge + " "
+
             is_new_radar = (item.get("created_at") or "") >= _wk_start.isoformat()
             label = f"{status_emoji}**{company}**"
             if is_new_radar:
@@ -1236,19 +1298,28 @@ elif nav == "🔭 On Radar":
                 label += f" · {sector}"
             if stage:
                 label += f" · {stage}"
-            if score is not None:
-                label += f" · `{score}/100`"
 
             with st.expander(label):
+                # Score badge + meta in one row
+                header_parts = []
+                if score is not None:
+                    header_parts.append(_score_badge(score))
                 meta_parts = []
                 if funding:
                     meta_parts.append(funding)
                 if investors:
                     meta_parts.append(f"backed by {investors}")
                 if meta_parts:
-                    st.caption(" · ".join(meta_parts))
+                    header_parts.append(f'<span style="color:#6b7280;font-size:0.88em">{" · ".join(meta_parts)}</span>')
+                if header_parts:
+                    st.markdown(
+                        f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">'
+                        + "".join(header_parts)
+                        + "</div>",
+                        unsafe_allow_html=True,
+                    )
                 if what:
-                    st.markdown(f"*{what}*")
+                    st.caption(what)
 
                 bcols = st.columns([1.3, 1, 1.2, 0.5])
                 with bcols[0]:
