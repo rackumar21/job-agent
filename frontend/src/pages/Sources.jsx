@@ -99,17 +99,16 @@ function WorkflowResult({ result }) {
   )
 
   const openRoles = result.open_roles || result.jobs_found || []
-  const addedToRadar = result.added_to_radar || []
+  const addedToRadar = result.radar_added || result.added_to_radar || []
   const skipped = result.skipped || []
+  const total = openRoles.length + addedToRadar.length + skipped.length
 
   return (
     <div className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 space-y-1">
-      {openRoles.length > 0 && <div>Found <strong>{openRoles.length}</strong> open {openRoles.length === 1 ? 'role' : 'roles'} — added to Open Roles.</div>}
-      {addedToRadar.length > 0 && <div>Added <strong>{addedToRadar.length}</strong> to On Radar.</div>}
-      {skipped.length > 0 && <div className="text-gray-400">Skipped {skipped.length} (low relevance score, added to Radar).</div>}
-      {openRoles.length === 0 && addedToRadar.length === 0 && skipped.length === 0 && (
-        <div className="text-gray-500">Workflow complete. {JSON.stringify(result)}</div>
-      )}
+      {openRoles.length > 0 && <div>Found <strong>{openRoles.length}</strong> open {openRoles.length === 1 ? 'role' : 'roles'}, added to Open Roles.</div>}
+      {addedToRadar.length > 0 && <div>Added <strong>{addedToRadar.length}</strong> {addedToRadar.length === 1 ? 'company' : 'companies'} to On Radar: {addedToRadar.map(c => c.company || c).join(', ')}.</div>}
+      {skipped.length > 0 && <div className="text-gray-400">Skipped {skipped.length} (low relevance).</div>}
+      {total === 0 && <div className="text-gray-500">Workflow complete, no new roles or companies found.</div>}
     </div>
   )
 }
