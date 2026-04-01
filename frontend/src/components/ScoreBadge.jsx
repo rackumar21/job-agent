@@ -2,7 +2,7 @@ import { scoreColor } from '../lib/utils'
 
 export default function ScoreBadge({ score, label = 'fit', size = 'md' }) {
   const { bg, text, border } = scoreColor(score)
-  const sz = size === 'lg' ? 'w-14 h-14 text-lg' : size === 'sm' ? 'w-9 h-9 text-xs' : 'w-12 h-12 text-sm'
+  const sz = size === 'lg' ? 'w-14 h-14 text-lg' : size === 'sm' ? 'w-8 h-8 text-[10px]' : 'w-10 h-10 text-xs'
 
   if (score == null) {
     return (

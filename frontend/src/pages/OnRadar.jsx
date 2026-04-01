@@ -78,7 +78,7 @@ function RadarCard({ item, onHide }) {
         onClick={() => setExpanded(e => !e)}
         className="w-full flex items-start gap-3 p-3 text-left hover:bg-gray-50/60 transition-colors"
       >
-        <ScoreBadge score={score} label="attn" size="sm" />
+        <ScoreBadge score={score} label="" size="sm" />
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-gray-900 text-sm">
             {statusPrefix}{item.name}

@@ -35,7 +35,7 @@ const HOW_CARDS = [
   {
     icon: '📊',
     title: 'Scores every role with Claude',
-    body: 'A keyword pre-filter runs first: roles below 30/100 are dropped. The rest are scored on 5 dimensions with Claude Sonnet: role fit (30%), company fit (25%), end-user layer (20%), growth signal (15%), location (10%). Scoring learns from actions: applied roles become benchmarks, skipped roles teach the filter.',
+    body: 'A keyword pre-filter drops non-fits. The rest are scored against my resume (cached for cost efficiency) on 5 dimensions with Claude Sonnet: role fit, company fit, end-user layer, growth signal, and location. Scoring learns from my actions: applied roles become positive benchmarks, skipped roles become negative signals.',
   },
   {
     icon: '🗂️',

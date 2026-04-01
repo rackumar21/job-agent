@@ -76,7 +76,7 @@ export default function JobCard({ job, onStatusChange }) {
               {isNew && <span className="shrink-0 px-1.5 py-0.5 rounded text-[0.6rem] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-600 border border-emerald-100">new</span>}
             </div>
           </div>
-          <ScoreBadge score={score} label="fit" />
+          <ScoreBadge score={score} label="" />
         </div>
 
         {/* Tags */}
