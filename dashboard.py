@@ -322,7 +322,7 @@ def _render_pipeline_runner(source_key: str):
         _already = st.session_state.get("pipeline_already_tracked", [])
         col_a, col_b = st.columns(2)
         with col_a:
-            st.markdown(f"**Added to dashboard:** {', '.join(_queue)}")
+            st.markdown(f"**Added to database:** {', '.join(_queue)}")
         with col_b:
             if _already:
                 st.markdown(f"**Already tracked:** {', '.join(_already)}")
@@ -425,7 +425,7 @@ if nav == "📡 Sources":
                 else:
                     col_a, col_b = st.columns(2)
                     with col_a:
-                        st.markdown("**Added to dashboard**")
+                        st.markdown("**Added to database**")
                         if newly_added:
                             for c in newly_added:
                                 st.markdown(f"- {c}")
