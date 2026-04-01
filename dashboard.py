@@ -397,40 +397,6 @@ if nav == "📡 Sources":
     # Show result from the global refresh button (🔄 in nav bar)
     _render_pipeline_runner("global_refresh")
 
-    st.markdown("#### Companies I want to track")
-    st.caption("Companies you know are a good fit. Added directly to database and checked for open roles — no score gate.")
-    _manual_input = st.text_input("Company name(s)", placeholder="e.g. Granola, Notion, Runway", key="manual_company_input")
-    if st.button("➕ Add and check for roles", type="primary", key="manual_add_btn"):
-        if not _manual_input.strip():
-            st.warning("Enter at least one company name.")
-        else:
-            with st.spinner("Adding..."):
-                from agent.discover_from_post import process_post
-                _manual_result = process_post(text=_manual_input.strip())
-            _manual_added = _manual_result.get("added", [])
-            _manual_existing = _manual_result.get("already_known", [])
-            if _manual_added:
-                # Pre-set attention score to 80 — user is vouching for these, skip score gate
-                for _co_name in _manual_added:
-                    try:
-                        supabase.table("companies").update({"attention_score": 80}).eq("name", _co_name).execute()
-                    except Exception:
-                        pass
-                st.session_state["pipeline_queue"] = _manual_added
-                st.session_state["pipeline_source"] = "manual"
-                st.session_state["pipeline_already_tracked"] = _manual_existing
-                st.session_state.pop("pipeline_result", None)
-                st.cache_data.clear()
-                st.rerun()
-            else:
-                if _manual_existing:
-                    st.info(f"Already tracked: {', '.join(_manual_existing)}")
-                else:
-                    st.warning("No company names recognised.")
-
-    _render_pipeline_runner("manual")
-
-    st.divider()
     st.markdown("#### Add from post text")
     post_text = st.text_area(
         "Paste the post text here",
@@ -501,6 +467,39 @@ if nav == "📡 Sources":
             st.info("No new companies found in today's feeds.")
 
     _render_pipeline_runner("rss")
+
+    st.divider()
+    st.markdown("#### Companies I want to track")
+    st.caption("Companies you know are a good fit. Added directly to database and checked for open roles — no score gate.")
+    _manual_input = st.text_input("Company name(s)", placeholder="e.g. Granola, Notion, Runway", key="manual_company_input")
+    if st.button("➕ Add and check for roles", type="primary", key="manual_add_btn"):
+        if not _manual_input.strip():
+            st.warning("Enter at least one company name.")
+        else:
+            with st.spinner("Adding..."):
+                from agent.discover_from_post import process_post
+                _manual_result = process_post(text=_manual_input.strip())
+            _manual_added = _manual_result.get("added", [])
+            _manual_existing = _manual_result.get("already_known", [])
+            if _manual_added:
+                for _co_name in _manual_added:
+                    try:
+                        supabase.table("companies").update({"attention_score": 80}).eq("name", _co_name).execute()
+                    except Exception:
+                        pass
+                st.session_state["pipeline_queue"] = _manual_added
+                st.session_state["pipeline_source"] = "manual"
+                st.session_state["pipeline_already_tracked"] = _manual_existing
+                st.session_state.pop("pipeline_result", None)
+                st.cache_data.clear()
+                st.rerun()
+            else:
+                if _manual_existing:
+                    st.info(f"Already tracked: {', '.join(_manual_existing)}")
+                else:
+                    st.warning("No company names recognised.")
+
+    _render_pipeline_runner("manual")
 
     st.divider()
     st.markdown("#### Connected systems")
