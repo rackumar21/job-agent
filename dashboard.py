@@ -82,29 +82,45 @@ st.set_page_config(page_title="Job Agent", layout="wide", page_icon="🥑")
 
 st.markdown("""
 <style>
-.score-high { color: #16a34a; font-weight: 700; }
-.score-mid  { color: #ca8a04; font-weight: 700; }
-.score-low  { color: #dc2626; font-weight: 600; }
-.score-none { color: #9ca3af; }
-.tag { background: #f3f4f6; border-radius: 4px; padding: 2px 8px; font-size: 0.8em; margin-right: 4px; }
-/* Remove default Streamlit top padding */
+/* ── Remove default top padding ─────────────────────── */
 .block-container { padding-top: 1rem !important; }
-/* Job card score badge */
+
+/* ── Score badge circle ──────────────────────────────── */
 .sbadge {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 38px; height: 38px; border-radius: 50%;
-    color: white; font-weight: 700; font-size: 0.8rem;
-    flex-shrink: 0; vertical-align: middle;
+    width: 42px; height: 42px; border-radius: 50%;
+    color: white; font-weight: 700; font-size: 0.82rem;
+    flex-shrink: 0; vertical-align: middle; line-height: 1;
 }
 .sbadge-high { background: #16a34a; }
 .sbadge-mid  { background: #ca8a04; }
 .sbadge-low  { background: #dc2626; }
 .sbadge-none { background: #e5e7eb; color: #9ca3af; }
-/* Score dims row */
-.dims { margin-left: 48px; margin-bottom: 10px; line-height: 1.6; }
+
+/* ── Job card container shadow ───────────────────────── */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    border-radius: 10px !important;
+    border-color: #e5e7eb !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07) !important;
+    margin-bottom: 8px !important;
+}
+
+/* ── Tag pills ───────────────────────────────────────── */
+.tag-new    { background:#dcfce7; color:#15803d; border-radius:10px; padding:2px 7px; font-size:0.72em; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; }
+.tag-sector { background:#f3f4f6; color:#374151; border-radius:10px; padding:2px 8px; font-size:0.76em; font-weight:500; }
+.tag-stage  { background:#dbeafe; color:#1d4ed8; border-radius:10px; padding:2px 8px; font-size:0.76em; font-weight:500; }
+
+/* ── Score dims row ──────────────────────────────────── */
+.dims    { margin-bottom: 8px; line-height: 1.8; }
 .dim-lbl { color: #9ca3af; font-size: 0.77em; }
 .dim-val { font-weight: 600; color: #374151; font-size: 0.77em; }
-.dim-sep { color: #d1d5db; font-size: 0.77em; }
+.dim-sep { color: #e5e7eb; font-size: 0.77em; }
+
+/* ── Radar card ──────────────────────────────────────── */
+.score-high { color: #16a34a; font-weight: 700; }
+.score-mid  { color: #ca8a04; font-weight: 700; }
+.score-low  { color: #dc2626; font-weight: 600; }
+.score-none { color: #9ca3af; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -778,230 +794,199 @@ elif nav == "📂 Open Roles":
     if not discover_jobs:
         st.info("No roles matching this filter.")
     else:
-        by_company = defaultdict(list)
-        for j in discover_jobs:
-            by_company[j["company_name"]].append(j)
+        # Flat list: this week first, then score descending
+        discover_jobs = sorted(
+            discover_jobs,
+            key=lambda j: (j.get("id") in _this_week_job_ids, j.get("attractiveness_score") or 0),
+            reverse=True,
+        )
+        st.caption(f"{len(discover_jobs)} role{'s' if len(discover_jobs) != 1 else ''}")
 
-        def best_score(cjobs):
-            return max(j.get("attractiveness_score") or 0 for j in cjobs)
+        for job in discover_jobs:
+            score          = job.get("attractiveness_score")
+            bd             = job.get("score_breakdown") or {}
+            job_id         = job["id"]
+            title          = job["title"]
+            company        = job["company_name"]
+            job_url        = job.get("url", "")
+            is_new         = job_id in _this_week_job_ids
+            reached_out_at = bd.get("reached_out_at")
+            key_angle      = bd.get("key_angle", "")
+            co_what        = company_lookup.get(company, {}).get("what_they_do", "")
+            date_str       = _rel_date(job.get("created_at", ""))
+            sector         = job["_sector"]
+            stage          = job["_stage"]
+            ats_report     = bd.get("ats_report") or {}
+            ats_score      = ats_report.get("ats_score") if ats_report else None
 
-        def is_new_co(cjobs):
-            return any(j.get("id") in _this_week_job_ids for j in cjobs)
+            with st.container(border=True):
 
-        sorted_companies = sorted(by_company.items(), key=lambda x: (is_new_co(x[1]), best_score(x[1])), reverse=True)
+                # ── Header: badge + title + company/tags ─────────────
+                c_badge, c_content = st.columns([0.5, 9])
 
-        for company, company_jobs in sorted_companies:
-            best       = best_score(company_jobs)
-            is_new     = is_new_co(company_jobs)
-            role_count = len(company_jobs)
+                with c_badge:
+                    st.markdown(_score_badge(score), unsafe_allow_html=True)
 
-            badge     = "🟢" if best >= 75 else ("🟡" if best >= 55 else ("🔴" if best > 0 else "⚪"))
-            co_record = company_lookup.get(company, {})
-            co_sector = company_jobs[0]["_sector"]
-            co_stage  = company_jobs[0]["_stage"]
-            co_what   = co_record.get("what_they_do", "")
-
-            label = f"{badge} **{company}**"
-            extras = []
-            if is_new:        extras.append("🆕")
-            if co_sector:     extras.append(co_sector)
-            if co_stage:      extras.append(co_stage)
-            if role_count > 1: extras.append(f"{role_count} roles")
-            if extras:        label += " · " + " · ".join(extras)
-
-            with st.expander(label, expanded=False):
-                if co_what:
-                    st.caption(co_what)
-
-                for idx, job in enumerate(company_jobs):
-                    if idx > 0:
-                        st.markdown(
-                            "<div style='border-top:1px solid #f3f4f6;margin:8px 0'></div>",
-                            unsafe_allow_html=True,
-                        )
-
-                    score          = job.get("attractiveness_score")
-                    bd             = job.get("score_breakdown") or {}
-                    title          = job["title"]
-                    job_id         = job["id"]
-                    job_url        = job.get("url", "")
-                    reached_out_at = bd.get("reached_out_at")
-                    date_str       = _rel_date(job.get("created_at", ""))
-
-                    # Title row: score badge + title
+                with c_content:
                     safe_title = html_lib.escape(title)
+                    if job_url:
+                        title_html = f'<a href="{job_url}" target="_blank" style="text-decoration:none;color:inherit;font-size:1.05rem;font-weight:700;line-height:1.3">{safe_title}</a>'
+                    else:
+                        title_html = f'<span style="font-size:1.05rem;font-weight:700;line-height:1.3">{safe_title}</span>'
+
+                    # Tag pills
+                    sep = '<span style="color:#e5e7eb;margin:0 4px">·</span>'
+                    tag_parts = [f'<span style="font-weight:600;color:#374151;font-size:0.88em">{html_lib.escape(company)}</span>']
+                    if is_new:
+                        tag_parts.append('<span class="tag-new">new</span>')
+                    if sector:
+                        tag_parts.append(f'<span class="tag-sector">{html_lib.escape(sector)}</span>')
+                    if stage:
+                        tag_parts.append(f'<span class="tag-stage">{html_lib.escape(stage)}</span>')
+                    if ats_score:
+                        _ac = "#16a34a" if ats_score >= 75 else ("#ca8a04" if ats_score >= 55 else "#dc2626")
+                        tag_parts.append(f'<span style="font-size:0.75em;font-weight:700;color:{_ac}">ATS {ats_score}</span>')
+                    if date_str:
+                        tag_parts.append(f'<span style="color:#9ca3af;font-size:0.78em">{date_str}</span>')
+
+                    tags_row = sep.join(tag_parts)
+                    subtext = key_angle or co_what
+                    subtext_html = f'<div style="color:#6b7280;font-size:0.84em;margin-top:3px;line-height:1.4">→ {html_lib.escape(subtext)}</div>' if subtext else ""
+
                     st.markdown(
-                        f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">'
-                        f'{_score_badge(score)}'
-                        f'<strong style="font-size:1rem;line-height:1.3">{safe_title}</strong>'
-                        f'</div>',
+                        f'<div style="margin-bottom:3px">{title_html}</div>'
+                        f'<div style="line-height:2">{tags_row}</div>'
+                        f'{subtext_html}',
                         unsafe_allow_html=True,
                     )
 
-                    # Score dimensions row (inline, below title)
-                    if score:
-                        dim_map = [
-                            ("Role",   bd.get("role_fit"),       "/30"),
-                            ("Co",     bd.get("company_fit"),    "/25"),
-                            ("User",   bd.get("end_user_layer"), "/20"),
-                            ("Growth", bd.get("growth_signal"),  "/15"),
-                            ("Loc",    bd.get("location_fit"),   "/10"),
-                        ]
-                        sep = ' <span class="dim-sep">&nbsp;·&nbsp;</span> '
-                        parts = sep.join(
-                            f'<span class="dim-lbl">{lbl}</span> <span class="dim-val">{val}{suf}</span>'
-                            for lbl, val, suf in dim_map if val is not None
+                # ── Score dims row ────────────────────────────────────
+                if score:
+                    dim_map = [
+                        ("Role",   bd.get("role_fit"),       "/30"),
+                        ("Co",     bd.get("company_fit"),    "/25"),
+                        ("User",   bd.get("end_user_layer"), "/20"),
+                        ("Growth", bd.get("growth_signal"),  "/15"),
+                        ("Loc",    bd.get("location_fit"),   "/10"),
+                    ]
+                    dsep = ' <span class="dim-sep">&nbsp;·&nbsp;</span> '
+                    dparts = dsep.join(
+                        f'<span class="dim-lbl">{lbl}</span> <span class="dim-val">{val}{suf}</span>'
+                        for lbl, val, suf in dim_map if val is not None
+                    )
+                    st.markdown(f'<div class="dims">{dparts}</div>', unsafe_allow_html=True)
+
+                # ── Action buttons ────────────────────────────────────
+                bc1, bc2, bc3, bc4, bc5 = st.columns([1.2, 1.5, 1.2, 1, 0.8])
+                with bc1:
+                    if st.button("➕ Pipeline", key=f"pipe_{job_id}", use_container_width=True):
+                        update_job_status(job_id, "pipeline")
+                        st.toast(f"Added {company} to pipeline")
+                with bc2:
+                    ro_sent = bool(reached_out_at)
+                    if st.button("📧 Sent ✓" if ro_sent else "📧 Reached out",
+                                 key=f"ro_{job_id}", disabled=ro_sent, use_container_width=True):
+                        mark_reached_out(job_id, bd)
+                        st.toast("Marked as reached out. Follow-up reminder in 3 days.")
+                with bc3:
+                    if st.button("✅ Applied", key=f"applied_{job_id}", use_container_width=True):
+                        mark_applied(job_id, bd)
+                        st.toast(f"Applied to {company}")
+                with bc4:
+                    with st.popover("✕ Skip", use_container_width=True):
+                        skip_reason = st.text_input(
+                            "Reason (optional)", key=f"sr_{job_id}",
+                            placeholder="e.g. too infra-heavy, not PM role",
                         )
-                        if date_str:
-                            parts += f'{sep}<span class="dim-lbl">{date_str}</span>'
+                        if st.button("Confirm skip", key=f"skip_ok_{job_id}"):
+                            bd2 = job.get("score_breakdown") or {}
+                            if skip_reason.strip():
+                                bd2["skip_reason"] = skip_reason.strip()
+                                supabase.table("jobs").update({"score_breakdown": bd2}).eq("id", job_id).execute()
+                            update_job_status(job_id, "skip")
+                            st.toast("Skipped")
+                with bc5:
+                    if job_url:
+                        st.link_button("↗ View", job_url, use_container_width=True)
+
+                # ── Notes ─────────────────────────────────────────────
+                def _save_notes_or(jid=job_id, snap=dict(bd)):
+                    snap["notes"] = st.session_state.get(f"notes_{jid}", "")
+                    supabase.table("jobs").update({"score_breakdown": snap}).eq("id", jid).execute()
+                    st.cache_data.clear()
+                st.text_input(
+                    "", value=bd.get("notes", ""), key=f"notes_{job_id}",
+                    placeholder="Notes (saved automatically)...",
+                    label_visibility="collapsed", on_change=_save_notes_or,
+                )
+
+                # ── ATS Analysis ──────────────────────────────────────
+                _ats_c1, _ats_c2 = st.columns([2, 5])
+                with _ats_c1:
+                    if st.button("🔍 ATS Analysis", key=f"ats_{job_id}", use_container_width=True):
+                        _jd = job.get("jd_text", "")
+                        if not _jd:
+                            st.warning("No JD text stored. View the posting to get full analysis.")
+                        else:
+                            with st.spinner("Analyzing resume vs JD..."):
+                                from agent.ats import analyze_ats
+                                _ar = analyze_ats(title, company, _jd)
+                            if "error" not in _ar:
+                                _upd = dict(bd); _upd["ats_report"] = _ar
+                                supabase.table("jobs").update({"score_breakdown": _upd}).eq("id", job_id).execute()
+                                st.cache_data.clear(); st.rerun()
+                            else:
+                                st.error(_ar["error"])
+
+                if ats_report and "error" not in ats_report:
+                    with _ats_c2:
+                        _ab = "#16a34a" if ats_score >= 75 else ("#ca8a04" if ats_score >= 55 else "#dc2626")
                         st.markdown(
-                            f'<div class="dims">{parts}</div>',
+                            f'<span style="display:inline-flex;align-items:center;gap:8px">'
+                            f'<span class="sbadge sbadge-{"high" if ats_score>=75 else "mid" if ats_score>=55 else "low"}"'
+                            f' style="width:32px;height:32px;font-size:0.72rem">{ats_score}</span>'
+                            f'<span style="font-size:0.84em;color:#374151">ATS score</span>'
+                            f'</span>',
                             unsafe_allow_html=True,
                         )
-                    elif date_str:
-                        st.caption(date_str)
 
-                    # Action buttons
-                    bc1, bc2, bc3, bc4, bc5 = st.columns([1.2, 1.5, 1.2, 1, 0.8])
-                    with bc1:
-                        if st.button("➕ Pipeline", key=f"pipe_{job_id}", use_container_width=True):
-                            update_job_status(job_id, "pipeline")
-                            st.toast(f"Added {company} to pipeline")
-                    with bc2:
-                        ro_sent = bool(reached_out_at)
-                        if st.button(
-                            "📧 Sent ✓" if ro_sent else "📧 Reached out",
-                            key=f"ro_{job_id}", disabled=ro_sent, use_container_width=True,
-                        ):
-                            mark_reached_out(job_id, bd)
-                            st.toast("Marked as reached out. Follow-up reminder in 3 days.")
-                    with bc3:
-                        if st.button("✅ Applied", key=f"applied_{job_id}", use_container_width=True):
-                            mark_applied(job_id, bd)
-                            st.toast(f"Applied to {company}")
-                    with bc4:
-                        with st.popover("✕ Skip", use_container_width=True):
-                            skip_reason = st.text_input(
-                                "Reason (optional)",
-                                key=f"sr_{job_id}",
-                                placeholder="e.g. too infra-heavy, not PM role",
-                            )
-                            if st.button("Confirm skip", key=f"skip_ok_{job_id}"):
-                                bd2 = job.get("score_breakdown") or {}
-                                if skip_reason.strip():
-                                    bd2["skip_reason"] = skip_reason.strip()
-                                    supabase.table("jobs").update(
-                                        {"score_breakdown": bd2}
-                                    ).eq("id", job_id).execute()
-                                update_job_status(job_id, "skip")
-                                st.toast("Skipped")
-                    with bc5:
-                        if job_url:
-                            st.link_button("↗ View", job_url, use_container_width=True)
-
-                    # ── Notes ────────────────────────────────────────────
-                    _notes_key = f"notes_{job_id}"
-                    _existing_notes = bd.get("notes", "")
-                    def _save_notes_or(jid=job_id, snap=dict(bd)):
-                        val = st.session_state.get(f"notes_{jid}", "")
-                        snap["notes"] = val
-                        supabase.table("jobs").update({"score_breakdown": snap}).eq("id", jid).execute()
-                        st.cache_data.clear()
-                    st.text_input(
-                        "", value=_existing_notes, key=_notes_key,
-                        placeholder="Add notes (saved automatically)...",
-                        label_visibility="collapsed",
-                        on_change=_save_notes_or,
-                    )
-
-                    # ── ATS Analysis ─────────────────────────────────────
-                    _ats_report = bd.get("ats_report")
-                    _ats_col1, _ats_col2 = st.columns([2, 5])
-                    with _ats_col1:
-                        if st.button("🔍 ATS Analysis", key=f"ats_{job_id}", use_container_width=True):
-                            _jd = job.get("jd_text", "")
-                            if not _jd:
-                                st.warning("No JD text stored for this role. View the posting to get full analysis.")
+                if ats_report and "error" not in ats_report:
+                    with st.expander("ATS details", expanded=False):
+                        if ats_report.get("summary"):
+                            st.caption(ats_report["summary"])
+                        _miss = ats_report.get("missing_keywords", [])
+                        _strong = ats_report.get("strong_matches", [])
+                        _mc, _sc = st.columns(2)
+                        with _mc:
+                            st.markdown("**Missing keywords**")
+                            if _miss:
+                                st.markdown(" ".join(
+                                    f'<span style="background:#fee2e2;color:#991b1b;border-radius:4px;padding:2px 7px;font-size:0.77em;margin:2px;display:inline-block">{k}</span>'
+                                    for k in _miss), unsafe_allow_html=True)
                             else:
-                                with st.spinner("Analyzing resume vs JD..."):
-                                    from agent.ats import analyze_ats
-                                    _ats_result = analyze_ats(title, company, _jd)
-                                if "error" not in _ats_result:
-                                    _bd_update = dict(bd)
-                                    _bd_update["ats_report"] = _ats_result
-                                    supabase.table("jobs").update({"score_breakdown": _bd_update}).eq("id", job_id).execute()
-                                    st.cache_data.clear()
-                                    st.rerun()
-                                else:
-                                    st.error(_ats_result["error"])
-
-                    if _ats_report and "error" not in _ats_report:
-                        with _ats_col2:
-                            _ats_score = _ats_report.get("ats_score", 0)
-                            _ats_bg = "#16a34a" if _ats_score >= 75 else ("#ca8a04" if _ats_score >= 55 else "#dc2626")
+                                st.caption("Good coverage")
+                        with _sc:
+                            st.markdown("**Strong matches**")
+                            for s in _strong:
+                                st.markdown(f"✓ {s}")
+                        for r in ats_report.get("rewrite_suggestions", []):
                             st.markdown(
-                                f'<span style="display:inline-flex;align-items:center;gap:8px">'
-                                f'<span class="sbadge" style="background:{_ats_bg};width:32px;height:32px;font-size:0.72rem">{_ats_score}</span>'
-                                f'<span style="font-size:0.85em;color:#374151">ATS score</span>'
-                                f'</span>',
-                                unsafe_allow_html=True,
-                            )
-
-                    if _ats_report and "error" not in _ats_report:
-                        with st.expander("ATS Analysis details", expanded=False):
-                            _sum = _ats_report.get("summary", "")
-                            if _sum:
-                                st.caption(_sum)
-
-                            _miss = _ats_report.get("missing_keywords", [])
-                            _strong = _ats_report.get("strong_matches", [])
-                            _mcol, _scol = st.columns(2)
-                            with _mcol:
-                                st.markdown("**Missing keywords**")
-                                if _miss:
-                                    st.markdown(" ".join(
-                                        f'<span style="background:#fee2e2;color:#991b1b;border-radius:4px;padding:2px 7px;font-size:0.77em;margin:2px;display:inline-block">{k}</span>'
-                                        for k in _miss
-                                    ), unsafe_allow_html=True)
-                                else:
-                                    st.caption("None — good coverage")
-                            with _scol:
-                                st.markdown("**Strong matches**")
-                                for s in _strong:
-                                    st.markdown(f"✓ {s}")
-
-                            _rewrites = _ats_report.get("rewrite_suggestions", [])
-                            if _rewrites:
-                                st.markdown("**Top rewrite suggestions**")
-                                for r in _rewrites:
-                                    st.markdown(
-                                        f'<div style="background:#f9fafb;border-radius:6px;padding:10px;margin:6px 0">'
-                                        f'<div style="color:#9ca3af;font-size:0.82em;margin-bottom:4px">Original</div>'
-                                        f'<div style="font-size:0.88em;margin-bottom:8px">{html_lib.escape(r.get("original",""))}</div>'
-                                        f'<div style="color:#16a34a;font-size:0.82em;margin-bottom:4px">Rewritten</div>'
-                                        f'<div style="font-size:0.88em;font-weight:500;margin-bottom:6px">{html_lib.escape(r.get("rewritten",""))}</div>'
-                                        f'<div style="color:#6b7280;font-size:0.78em">{html_lib.escape(r.get("reason",""))}</div>'
-                                        f'</div>',
-                                        unsafe_allow_html=True,
-                                    )
-
-                            _angles = _ats_report.get("cover_letter_angles", [])
-                            if _angles:
-                                st.markdown("**Cover letter angles**")
-                                for a in _angles:
-                                    st.markdown(f"→ {a}")
-
-                            _gaps = _ats_report.get("gaps", [])
-                            if _gaps:
-                                st.markdown("**Gaps**")
-                                for g in _gaps:
-                                    sev = g.get("severity", "medium")
-                                    sev_color = {"high": "#dc2626", "medium": "#ca8a04", "low": "#6b7280"}.get(sev, "#6b7280")
-                                    st.markdown(
-                                        f'<span style="color:{sev_color};font-size:0.78em;font-weight:600;text-transform:uppercase">{sev}</span> '
-                                        f'{html_lib.escape(g.get("gap",""))} — <em>{html_lib.escape(g.get("recommendation",""))}</em>',
-                                        unsafe_allow_html=True,
-                                    )
+                                f'<div style="background:#f9fafb;border-radius:6px;padding:10px;margin:6px 0">'
+                                f'<div style="color:#9ca3af;font-size:0.8em">Before</div>'
+                                f'<div style="font-size:0.87em;margin:3px 0 8px">{html_lib.escape(r.get("original",""))}</div>'
+                                f'<div style="color:#16a34a;font-size:0.8em">After</div>'
+                                f'<div style="font-size:0.87em;font-weight:500;margin:3px 0 6px">{html_lib.escape(r.get("rewritten",""))}</div>'
+                                f'<div style="color:#6b7280;font-size:0.77em">{html_lib.escape(r.get("reason",""))}</div>'
+                                f'</div>', unsafe_allow_html=True)
+                        for a in ats_report.get("cover_letter_angles", []):
+                            st.markdown(f"→ {a}")
+                        for g in ats_report.get("gaps", []):
+                            sev = g.get("severity", "medium")
+                            sc = {"high":"#dc2626","medium":"#ca8a04","low":"#6b7280"}.get(sev,"#6b7280")
+                            st.markdown(
+                                f'<span style="color:{sc};font-size:0.77em;font-weight:700;text-transform:uppercase">{sev}</span> '
+                                f'{html_lib.escape(g.get("gap",""))} — <em>{html_lib.escape(g.get("recommendation",""))}</em>',
+                                unsafe_allow_html=True)
 
 
 # ===========================================================================
