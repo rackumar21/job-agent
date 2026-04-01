@@ -184,9 +184,9 @@ def _process_one_company(name: str, rescore: bool = False, force_search: bool = 
     what            = co.get("what_they_do") or ""
     ashby_slug      = co.get("ashby_slug")
     greenhouse_slug = co.get("greenhouse_slug")
-    lever_slug      = co.get("lever_slug")
-    workable_slug   = co.get("workable_slug")
     attn            = co.get("attention_score")
+    lever_slug      = None
+    workable_slug   = None
 
     # Step 1: Score company
     if attn is None or rescore:
@@ -210,8 +210,8 @@ def _process_one_company(name: str, rescore: bool = False, force_search: bool = 
     if attn < RADAR_THRESHOLD and not force_search:
         return {"status": "radar", "company": name, "score": attn}
 
-    # Step 2b: Auto-discover ATS slugs if missing
-    if not ashby_slug and not greenhouse_slug and not lever_slug and not workable_slug:
+    # Step 2b: Auto-discover ATS slugs (always try Lever/Workable since they're not stored)
+    if not ashby_slug and not greenhouse_slug:
         discovered = _discover_ats_slugs(name)
         for ats, slug_val in discovered.items():
             if ats == "ashby" and not ashby_slug:
@@ -225,8 +225,6 @@ def _process_one_company(name: str, rescore: bool = False, force_search: bool = 
         slug_updates = {}
         if ashby_slug: slug_updates["ashby_slug"] = ashby_slug
         if greenhouse_slug: slug_updates["greenhouse_slug"] = greenhouse_slug
-        if lever_slug: slug_updates["lever_slug"] = lever_slug
-        if workable_slug: slug_updates["workable_slug"] = workable_slug
         if slug_updates:
             supabase.table("companies").update(slug_updates).eq("id", co["id"]).execute()
 
