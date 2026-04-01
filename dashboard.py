@@ -493,27 +493,49 @@ if nav == "📡 Sources":
             for _jurl in _urls:
                 try:
                     import httpx as _httpx
-                    import anthropic as _anthropic
-                    _r = _httpx.get(_jurl, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True, timeout=10)
-                    _html = _r.text
-                    _html = _re.sub(r"<(script|style)[^>]*>.*?</(script|style)>", " ", _html, flags=_re.DOTALL | _re.IGNORECASE)
-                    _page_text = _re.sub(r"<[^>]+>", " ", _html)
-                    _page_text = _re.sub(r"\s+", " ", _page_text).strip()[:6000]
+                    _co_name, _title, _summary = None, None, ""
 
-                    _ai = _anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-                    _msg = _ai.messages.create(
-                        model="claude-haiku-4-5-20251001",
-                        max_tokens=300,
-                        messages=[{"role": "user", "content": f"""Extract job info from this page. Return ONLY valid JSON, no markdown:
-{{"company": "<company name>", "title": "<job title>", "summary": "<2-3 sentence job description summary>"}}
+                    # Ashby: https://jobs.ashbyhq.com/{slug}/{job-id}
+                    _ashby_m = _re.match(r"https://jobs\.ashbyhq\.com/([^/]+)/([^/?]+)", _jurl)
+                    # Greenhouse: https://boards.greenhouse.io/{slug}/jobs/{job-id}
+                    _gh_m = _re.match(r"https://boards\.greenhouse\.io/([^/]+)/jobs/(\d+)", _jurl)
 
-PAGE:
-{_page_text}"""}],
-                    )
-                    _job_info = json.loads(_msg.content[0].text.strip())
-                    _co_name = _job_info.get("company", "Unknown")
-                    _title = _job_info.get("title", "Unknown Role")
-                    _summary = _job_info.get("summary", "")
+                    if _ashby_m:
+                        _slug, _job_id = _ashby_m.group(1), _ashby_m.group(2)
+                        _api = _httpx.get(f"https://api.ashbyhq.com/posting-api/job-board/{_slug}", timeout=8)
+                        _jobs_list = _api.json().get("jobs", [])
+                        _match = next((j for j in _jobs_list if j.get("id") == _job_id or _job_id in j.get("jobUrl", "")), None)
+                        if _match:
+                            _co_name = _match.get("companyName") or _slug.replace("-", " ").title()
+                            _title = _match.get("title", "")
+                            _summary = (_match.get("descriptionPlain") or "")[:1000]
+                        else:
+                            _co_name = _slug.replace("-", " ").title()
+                            _title = "Role from Ashby"
+
+                    elif _gh_m:
+                        _slug, _job_id = _gh_m.group(1), _gh_m.group(2)
+                        _api = _httpx.get(f"https://boards-api.greenhouse.io/v1/boards/{_slug}/jobs/{_job_id}", timeout=8)
+                        _jdata = _api.json()
+                        _co_name = _jdata.get("company", {}).get("name") or _slug.replace("-", " ").title()
+                        _title = _jdata.get("title", "")
+                        _summary = _re.sub(r"<[^>]+>", " ", _jdata.get("content") or "")[:1000]
+
+                    else:
+                        # Generic fallback — try plain fetch + Claude
+                        _r = _httpx.get(_jurl, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True, timeout=10)
+                        _html = _re.sub(r"<(script|style)[^>]*>.*?</(script|style)>", " ", _r.text, flags=_re.DOTALL | _re.IGNORECASE)
+                        _page_text = _re.sub(r"\s+", " ", _re.sub(r"<[^>]+>", " ", _html)).strip()[:5000]
+                        import anthropic as _anthropic
+                        _ai = _anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+                        _msg = _ai.messages.create(
+                            model="claude-haiku-4-5-20251001", max_tokens=200,
+                            messages=[{"role": "user", "content": f'Extract job info. Return ONLY JSON: {{"company":"...","title":"...","summary":"..."}}\n\n{_page_text}'}],
+                        )
+                        _job_info = json.loads(_msg.content[0].text.strip())
+                        _co_name = _job_info.get("company", "Unknown")
+                        _title = _job_info.get("title", "Unknown Role")
+                        _summary = _job_info.get("summary", "")
 
                     # Ensure company exists in companies table
                     _co_res = supabase.table("companies").select("id").ilike("name", _co_name).execute()
@@ -586,7 +608,6 @@ PAGE:
 <b>Ashby</b> · 49 verified company slugs<br>
 <b>Greenhouse</b> · 12 verified company slugs<br>
 <b>Work at a Startup</b> · YC company list via Apify<br>
-<b>LinkedIn</b> · job board monitored via Apify<br>
 <span style="color:#6b7280; font-size:0.85em">Polled every Monday 9am PT</span>
 </div>
 
@@ -594,7 +615,6 @@ PAGE:
 <div style="font-size:1.2em; margin-bottom:6px">💰 Funding signals</div>
 <b>TechCrunch</b> · RSS feed<br>
 <b>Next Play newsletter</b> · RSS feed<br>
-<b>LinkedIn posts</b> · paste URL or text<br>
 <span style="color:#6b7280; font-size:0.85em">Scanned every Monday 9:05am PT</span>
 </div>
 
@@ -608,8 +628,8 @@ PAGE:
 
 <div style="background:#f9fafb; border-radius:8px; padding:14px">
 <div style="font-size:1.2em; margin-bottom:6px">🔵 LinkedIn</div>
+<b>Job board</b> · open roles scraped via Apify<br>
 <b>Curator monitor</b> · watches accounts posting funded startup lists<br>
-<b>Post extraction</b> · paste any post, extracts companies<br>
 <span style="color:#6b7280; font-size:0.85em">Monday + Thursday 9:10am PT</span>
 </div>
 
