@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-3 py-1.5 rounded-lg font-medium text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed border-0 outline-none;
+  }
+  .btn-primary {
+    @apply btn bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-gray-700 border border-gray-200 hover:bg-gray-50;
+  }
+  .btn-ghost {
+    @apply btn text-gray-500 hover:bg-gray-100 hover:text-gray-700;
+  }
+  .btn-success {
+    @apply btn bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100;
+  }
+  .btn-warning {
+    @apply btn bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100;
+  }
+  .btn-danger {
+    @apply btn bg-red-50 text-red-600 border border-red-200 hover:bg-red-100;
+  }
+  .card {
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm;
+  }
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+}

@@ -579,12 +579,13 @@ CONTEXT (from newsletter/article/web):
 
 Score this company 0-100 for "attention worthiness":
 - 80-100: Rachita should reach out NOW even without a job posting. Perfect domain fit, right stage.
-- 60-79: Worth watching. Reach out when they post a role.
-- 40-59: Tangential fit. Skip.
+- 60-79: Worth watching. Strong PM culture, right domain, would be a good role.
+- 40-59: Possible. Large established company with strong PM track record, or tangential AI fit.
 - 0-39: Not a fit. Drop.
 
-Good fits (score 60+): AI agents, voice AI, vertical AI SaaS, enterprise AI (meeting intelligence, productivity, knowledge management), fintech, B2B automation, revenue intelligence, customer success AI.
-Bad fits (score below 35): pure dev infra, coding assistants, cybersecurity, health AI, defense, climate tech, pure infra/cloud.
+Good fits (score 60+): AI agents, voice AI, vertical AI SaaS, enterprise AI (meeting intelligence, productivity, knowledge management), fintech, B2B automation, revenue intelligence, customer success AI, recruiting AI, legal AI, sales AI.
+Also score 50+ if: well-known B2B SaaS with strong PM culture even if not AI-native (e.g. Airtable, Notion, Linear, Figma, Stripe, Brex — companies where PMs do real product work and company is respected).
+Bad fits (score below 35): pure dev infra, coding assistants, cybersecurity, health AI, defense, climate tech, pure infra/cloud, hardware only.
 Use your own knowledge of this company (you likely know it) — don't rely only on the context above.
 
 Also:

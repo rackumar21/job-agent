@@ -158,19 +158,12 @@ def process_post(url: str = None, text: str = None) -> dict:
             already.append(company)
             continue
 
-        # Find ATS slugs (no score gate — pipeline handles scoring)
-        ashby_slug = find_ashby_slug(company)
-        gh_slug = None if ashby_slug else find_greenhouse_slug(company)
-
+        # Just add the company name — pipeline handles slug discovery and scoring
         row = {
             "name": company,
             "source": "post",
             "radar_status": "watching",
         }
-        if ashby_slug:
-            row["ashby_slug"] = ashby_slug
-        if gh_slug:
-            row["greenhouse_slug"] = gh_slug
 
         try:
             supabase.table("companies").insert(row).execute()
