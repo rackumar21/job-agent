@@ -109,7 +109,3 @@ cd frontend && npm run dev                     # Frontend (localhost:3001)
 ## Cost
 
 Running this agent costs ~$3-5/month in Claude API calls. Prompt caching reduces ATS analysis cost by 90%. The keyword pre-filter eliminates most roles before they hit Claude.
-
-## License
-
-MIT
