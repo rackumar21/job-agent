@@ -1,4 +1,6 @@
 .env
+.env.*
+frontend/.env.local
 venv/
 .venv/
 __pycache__/
@@ -8,3 +10,7 @@ logs/
 *.log
 node_modules/
 frontend/node_modules/
+profile/resume.md
+profile/resume.docx
+profile/about.md
+profile/preferences.json

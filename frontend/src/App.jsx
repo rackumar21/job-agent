@@ -7,6 +7,7 @@ import Pipeline from './pages/Pipeline'
 import ReachedOut from './pages/ReachedOut'
 import Applied from './pages/Applied'
 import Sources from './pages/Sources'
+import Resume from './pages/Resume'
 
 function NavTab({ to, children, end }) {
   return (
@@ -156,6 +157,7 @@ export default function App() {
             <NavTab to="/reached-out">Outreach</NavTab>
             <NavTab to="/applied">Applied</NavTab>
             <NavTab to="/sources">Sources</NavTab>
+            <NavTab to="/resume">Resume</NavTab>
           </nav>
 
           <div className="shrink-0" />
@@ -181,6 +183,7 @@ export default function App() {
           <Route path="/reached-out" element={<ReachedOut />} />
           <Route path="/applied" element={<Applied />} />
           <Route path="/sources" element={<Sources />} />
+          <Route path="/resume" element={<Resume />} />
         </Routes>
       </main>
     </div>

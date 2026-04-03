@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { fmtDateMDY } from '../lib/utils'
 import ScoreBadge from './ScoreBadge'
 
 export default function JobCard({ job, onStatusChange }) {
+  const navigate = useNavigate()
   const [localJob, setLocalJob] = useState(job)
   const [loading, setLoading] = useState(false)
   const [showSkip, setShowSkip] = useState(false)
@@ -139,6 +141,7 @@ export default function JobCard({ job, onStatusChange }) {
             {reachedOut ? 'Sent ✓' : 'Outreach'}
           </ActionBtn>
           <ActionBtn className="flex-1" onClick={() => updateStatus('applied')} disabled={loading}>Applied</ActionBtn>
+          <ActionBtn className="flex-1" onClick={() => navigate(`/resume?jobId=${localJob.id}`)}>ATS</ActionBtn>
         </div>
         {/* Row 2: secondary links */}
         <div className="flex items-center justify-between">

@@ -93,6 +93,147 @@ async def run_pipeline():
         return {"status": "error", "message": str(e)}
 
 
+class AtsUrlRequest(BaseModel):
+    url: Optional[str] = None
+    title: Optional[str] = None
+    company: Optional[str] = None
+    jd_text: Optional[str] = None
+
+
+@app.post("/api/ats/analyze-url")
+async def ats_analyze_url(req: AtsUrlRequest):
+    """
+    Run ATS analysis from a job URL or raw JD text.
+    If URL provided: scrapes JD from Ashby/Greenhouse/Lever/Workable/generic page.
+    If jd_text provided directly: uses that instead.
+    Does NOT save to Supabase (ad-hoc, not tracked).
+    """
+    import re as _re
+    import httpx as _httpx
+    import json as _json
+    import anthropic as _anthropic
+
+    title = req.title or ""
+    company = req.company or ""
+    jd_text = req.jd_text or ""
+
+    # If URL provided, scrape JD from it
+    if req.url and not jd_text:
+        jurl = req.url.strip()
+        try:
+            ashby_m = _re.match(r"https://jobs\.ashbyhq\.com/([^/]+)/([^/?]+)", jurl)
+            gh_m = _re.match(r"https://boards\.greenhouse\.io/([^/]+)/jobs/(\d+)", jurl)
+            lever_m = _re.match(r"https://jobs\.lever\.co/([^/]+)/([^/?]+)", jurl)
+            workable_m = _re.match(r"https://apply\.workable\.com/([^/]+)/j/([^/?]+)", jurl)
+
+            if ashby_m:
+                slug, job_id = ashby_m.group(1), ashby_m.group(2)
+                api = _httpx.get(f"https://api.ashbyhq.com/posting-api/job-board/{slug}", timeout=10)
+                jobs_list = api.json().get("jobs", [])
+                match = next((j for j in jobs_list if j.get("id") == job_id or job_id in j.get("jobUrl", "")), None)
+                if match:
+                    company = company or match.get("companyName") or slug.replace("-", " ").title()
+                    title = title or match.get("title", "")
+                    jd_text = (match.get("descriptionPlain") or "")[:5000]
+                else:
+                    raise HTTPException(status_code=404, detail="Job not found on Ashby board")
+
+            elif gh_m:
+                slug, job_id = gh_m.group(1), gh_m.group(2)
+                api = _httpx.get(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs/{job_id}", timeout=10)
+                jdata = api.json()
+                company = company or jdata.get("company", {}).get("name") or slug.replace("-", " ").title()
+                title = title or jdata.get("title", "")
+                jd_text = _re.sub(r"<[^>]+>", " ", jdata.get("content") or "")[:5000]
+
+            elif lever_m:
+                slug = lever_m.group(1)
+                company = company or slug.replace("-", " ").title()
+                r = _httpx.get(jurl, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True, timeout=10)
+                html = _re.sub(r"<(script|style)[^>]*>.*?</(script|style)>", " ", r.text, flags=_re.DOTALL | _re.IGNORECASE)
+                page_text = _re.sub(r"\s+", " ", _re.sub(r"<[^>]+>", " ", html)).strip()[:5000]
+                jd_text = page_text
+                if not title:
+                    title_m = _re.search(r"<title[^>]*>([^<]+)", r.text)
+                    title = title_m.group(1).strip() if title_m else "Role"
+
+            elif workable_m:
+                slug = workable_m.group(1)
+                company = company or slug.replace("-", " ").title()
+                r = _httpx.get(jurl, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True, timeout=10)
+                html = _re.sub(r"<(script|style)[^>]*>.*?</(script|style)>", " ", r.text, flags=_re.DOTALL | _re.IGNORECASE)
+                page_text = _re.sub(r"\s+", " ", _re.sub(r"<[^>]+>", " ", html)).strip()[:5000]
+                jd_text = page_text
+                if not title:
+                    title_m = _re.search(r"<title[^>]*>([^<]+)", r.text)
+                    title = title_m.group(1).strip() if title_m else "Role"
+
+            else:
+                # Generic URL — scrape and use Claude to extract
+                r = _httpx.get(jurl, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True, timeout=10)
+                html = _re.sub(r"<(script|style)[^>]*>.*?</(script|style)>", " ", r.text, flags=_re.DOTALL | _re.IGNORECASE)
+                page_text = _re.sub(r"\s+", " ", _re.sub(r"<[^>]+>", " ", html)).strip()[:5000]
+                cl = _anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+                msg = cl.messages.create(
+                    model="claude-haiku-4-5-20251001", max_tokens=300,
+                    messages=[{"role": "user", "content": f'Extract job info. Return ONLY JSON: {{"company":"...","title":"...","jd_text":"<full job description text>"}}\n\n{page_text}'}],
+                )
+                raw = msg.content[0].text.strip()
+                if raw.startswith("```"):
+                    raw = raw.split("```")[1]
+                    if raw.startswith("json"):
+                        raw = raw[4:]
+                    raw = raw.strip()
+                info = _json.loads(raw)
+                company = company or info.get("company", "Unknown")
+                title = title or info.get("title", "Unknown Role")
+                jd_text = info.get("jd_text", page_text)
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not extract JD from URL: {str(e)[:200]}. Try pasting the job description text directly.")
+
+    if not jd_text.strip():
+        raise HTTPException(status_code=400, detail="No job description text available. Provide a URL or paste the JD text.")
+
+    result = analyze_ats(title, company, jd_text)
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+
+    # Include the extracted metadata so frontend can display it
+    result["_title"] = title
+    result["_company"] = company
+
+    return result
+
+
+class ResumeDownloadRequest(BaseModel):
+    approved_changes: list[dict]
+    company: Optional[str] = ""
+
+
+@app.post("/api/resume/download")
+async def download_resume(req: ResumeDownloadRequest):
+    """Generate a tailored .docx resume with approved text changes."""
+    from fastapi.responses import Response
+    from agent.resume_docx import apply_changes
+
+    if not req.approved_changes:
+        raise HTTPException(status_code=400, detail="No changes provided")
+
+    try:
+        docx_bytes, filename = apply_changes(req.approved_changes, req.company or "")
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return Response(
+        content=docx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 class RadarDraftRequest(BaseModel):
     company_id: str
     company: str

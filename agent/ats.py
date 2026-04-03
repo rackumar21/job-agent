@@ -106,6 +106,9 @@ Rules:
 - strong_matches: max 3 bullets
 - gaps: max 4 gaps, focus on high-severity ones
 - rewrite_suggestions: exactly 3, highest-impact only
+- CRITICAL LENGTH RULE: The rewritten bullet MUST have the SAME number of characters or FEWER than the original. Count the characters. If the original is 180 characters, the rewrite must be 180 or under. This is a hard constraint. The resume is exactly 1 page and any expansion will break it. Only swap keywords and reframe, never add words or clauses.
+- CRITICAL: each rewrite must ONLY modify that single bullet. Do NOT merge, combine, or pull in content from other resume bullets.
+- NEVER use em dashes, en dashes, or arrows in rewrites. Use commas, semicolons, or periods instead.
 - cover_letter_angles: 2-3 specific angles (not generic)
 - Score honestly: 60-75 is a strong match for most roles"""
 
@@ -127,7 +130,14 @@ Rules:
             if raw.startswith("json"):
                 raw = raw[4:]
             raw = raw.strip()
-        return json.loads(raw)
+        result = json.loads(raw)
+        # Enforce length: allow up to 10% longer (a few chars won't break 1-page layout)
+        if "rewrite_suggestions" in result:
+            result["rewrite_suggestions"] = [
+                s for s in result["rewrite_suggestions"]
+                if len(s.get("rewritten", "")) <= len(s.get("original", "")) * 1.1
+            ]
+        return result
     except json.JSONDecodeError as e:
         return {"error": f"JSON parse error: {e}"}
     except Exception as e:
