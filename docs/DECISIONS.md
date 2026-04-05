@@ -49,3 +49,38 @@
 **Chose**: Agent drafts everything, Rachita reviews and executes manually
 **Rejected**: Auto-send LinkedIn messages, auto-apply to jobs
 **Why**: Quality over volume. Bad outreach damages reputation. The agent's job is to surface the right opportunities and draft the right words. The human decides what gets sent.
+
+## 11. Copy-paste resume tailoring over .docx download
+**Chose**: Show rewrite suggestions with Copy buttons; user pastes into Google Doc
+**Rejected**: Generate modified .docx with python-docx text replacement
+**Why**: python-docx corrupts complex formatting (blue header boxes expand, spacing breaks). The resume lives in Google Docs, and preserving its exact formatting matters more than automation. Copy-paste is reliable and keeps user in control.
+
+## 12. Programmatic length filter on ATS rewrites
+**Chose**: Backend drops any rewrite suggestion longer than 110% of original character count
+**Rejected**: Relying only on prompt instructions to constrain length
+**Why**: LLMs don't reliably count characters. Even with "MUST be same length or shorter" in the prompt, Haiku consistently generated longer rewrites. Hard code filter is the only reliable guard. 110% threshold (not 100%) avoids dropping good suggestions over a few extra characters.
+
+## 13. Separate Resume tab (not inline on job cards)
+**Chose**: Dedicated /resume tab with URL input + ATS report + tailoring UI
+**Rejected**: Inline ATS analysis on each job card in Open Roles
+**Why**: Resume tailoring needs space (original vs rewrite side by side, editable textareas, approve flow). Job cards are compact. Also needed to support ad-hoc URLs not in the tracked job database. Job cards get an "ATS" button that links to /resume?jobId=X.
+
+## 14. Remove sensitive files from git, keep on disk
+**Chose**: git rm --cached for profile/resume.md, about.md, preferences.json, frontend/.env.local; added to .gitignore
+**Rejected**: Deleting files entirely, or using git filter-repo to purge history
+**Why**: Files are needed locally (ATS reads resume.md, frontend needs .env.local). Purging git history is destructive and not urgent since the repo was already public. The immediate fix is stopping future commits from including them.
+
+## 15. Truthseek landing page: clean hero over photo hero
+**Chose**: White background with centered headline, subtitle, and dual CTAs (Get Started Free + Try Live Research Call)
+**Rejected**: Full-bleed background photo with overlaid text (original design)
+**Why**: Competitor analysis (Genway, others) showed the industry standard is clean hero + product demo preview. Photo hero looked impressive but buried the CTAs and didn't communicate the product. Clean layout with clear CTAs is better for conversion.
+
+## 16. Truthseek: hardcode sign-up URL instead of env var
+**Chose**: Hardcode `https://app.truthseek.in/try-now` directly in JSX
+**Rejected**: `process.env.NEXT_PUBLIC_WEB_URL` template literal
+**Why**: No `.env.local` file existed in the repo, so the env var resolved to empty string, making all sign-up buttons link to just `/try-now` (broken). Hardcoding is more reliable for a URL that doesn't change between environments.
+
+## 17. Truthseek: branch-based PRs over direct pushes
+**Chose**: Push changes on `landing-page-redesign` branch, merge via PR, then merge dev->main via PR
+**Rejected**: Direct push to dev/main
+**Why**: Rachita needs the ability to revert. PRs give a one-click "Revert" button on GitHub. Also creates a clean audit trail of what changed and why.

@@ -22,9 +22,19 @@
 - [ ] Fix Render deployment lag (sometimes needs manual clear cache)
 - [ ] Verify all companies have descriptions (what_they_do)
 
+## Completed (April 2, 2026)
+- [x] Resume tab: paste URL or JD text, run ATS analysis, review/edit rewrite suggestions, copy tailored bullets
+- [x] ATS endpoint scrapes JDs from Ashby/Greenhouse/Lever/Workable/generic URLs
+- [x] ATS button on job cards links to Resume tab with job pre-loaded
+- [x] /ats CLI skill for quick ATS analysis from terminal
+- [x] README with architecture diagram, features, setup
+- [x] Removed sensitive files from git (resume, preferences, .env.local)
+- [x] Added Job Search Agent to portfolio site (rachita-portfolio)
+- [x] resume.md synced with actual .docx content
+
 ## Next Up
 - [ ] Interview prep document (architecture, what makes it agentic, v2 scope, challenges)
 - [ ] Behavioral signals in scoring (applied/skipped jobs inform future scores)
-- [ ] ATS analysis integration (Claude Haiku resume vs JD)
 - [ ] Monday brief generation
 - [ ] Webhook callbacks from Apify instead of polling
+- [ ] Purge sensitive files from git history (git filter-repo)
